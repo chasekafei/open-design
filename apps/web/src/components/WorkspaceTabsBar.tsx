@@ -89,7 +89,7 @@ function tabFromRoute(route: Route, timestamp = Date.now()): WorkspaceChromeTab 
       lastActiveAt: timestamp,
     };
   }
-  return createEntryTab(route.view, timestamp);
+  return createEntryTab(route.kind === 'home' ? route.view : 'design-systems', timestamp);
 }
 
 function routeForTab(tab: WorkspaceChromeTab): Route {

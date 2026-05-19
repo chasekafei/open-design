@@ -227,6 +227,9 @@ interface Props {
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, name: string) => void;
   onChangeDefaultDesignSystem: (id: string) => void;
+  onCreateDesignSystem?: () => void;
+  onOpenDesignSystem?: (id: string) => void;
+  onDesignSystemsRefresh?: () => Promise<void> | void;
   onPersistComposioKey: (composio: AppConfig['composio']) => Promise<void> | void;
   onOpenSettings: (
     section?:
@@ -278,6 +281,9 @@ export function EntryShell({
   onDeleteProject,
   onRenameProject,
   onChangeDefaultDesignSystem,
+  onCreateDesignSystem,
+  onOpenDesignSystem,
+  onDesignSystemsRefresh,
   onPersistComposioKey,
   onOpenSettings,
 }: Props) {
@@ -813,6 +819,9 @@ export function EntryShell({
                     systems={designSystems}
                     selectedId={defaultDesignSystemId}
                     onSelect={onChangeDefaultDesignSystem}
+                    onCreate={onCreateDesignSystem}
+                    onOpenSystem={onOpenDesignSystem}
+                    onSystemsRefresh={onDesignSystemsRefresh}
                     onPreview={(id) => setPreviewSystemId(id)}
                   />
                 </div>

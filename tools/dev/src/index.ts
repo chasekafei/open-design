@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { lstat, mkdir, open, rm, symlink, writeFile, type FileHandle } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, rm, symlink, writeFile, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 
 import { cac } from "cac";
@@ -415,6 +415,7 @@ async function spawnDaemonRuntime(
   const logHandle = await openAppLog(config, APP_KEYS.DAEMON);
 
   try {
+    await ensureDaemonCliBuild(config, logHandle);
     await logHandle.write(`\n[tools-dev] launching daemon at ${new Date().toISOString()}\n`);
     if (webPort != null) await logHandle.write(`[tools-dev] trusting web origin port ${webPort}\n`);
     if (spawnOptions.requireDesktopAuth) {
@@ -484,6 +485,44 @@ async function spawnWebRuntime(config: ToolDevConfig, options: CliOptions): Prom
 async function buildDesktop(config: ToolDevConfig, logHandle: FileHandle): Promise<void> {
   await logHandle.write(`\n[tools-dev] building @open-design/desktop at ${new Date().toISOString()}\n`);
   const invocation = createPackageManagerInvocation(["--filter", "@open-design/desktop", "build"], process.env);
+  await runLoggedCommand({
+    args: invocation.args,
+    command: invocation.command,
+    cwd: config.workspaceRoot,
+    env: process.env,
+    logFd: logHandle.fd,
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+  });
+}
+
+async function latestMtimeMs(filePath: string): Promise<number> {
+  const entry = await lstat(filePath).catch(() => null);
+  if (entry == null) return 0;
+  if (!entry.isDirectory()) return entry.mtimeMs;
+
+  const children = await readdir(filePath, { withFileTypes: true }).catch(() => []);
+  let latest = entry.mtimeMs;
+  for (const child of children) {
+    if (child.name === "node_modules" || child.name === "dist" || child.name === ".tmp") continue;
+    latest = Math.max(latest, await latestMtimeMs(path.join(filePath, child.name)));
+  }
+  return latest;
+}
+
+async function ensureDaemonCliBuild(config: ToolDevConfig, logHandle: FileHandle): Promise<void> {
+  const daemonRoot = path.join(config.workspaceRoot, "apps/daemon");
+  const distCliPath = path.join(daemonRoot, "dist/cli.js");
+  const distMtime = await latestMtimeMs(distCliPath);
+  const sourceMtime = Math.max(
+    await latestMtimeMs(path.join(daemonRoot, "src")),
+    await latestMtimeMs(path.join(daemonRoot, "package.json")),
+    await latestMtimeMs(path.join(daemonRoot, "tsconfig.json")),
+  );
+  if (distMtime > 0 && distMtime >= sourceMtime) return;
+
+  const reason = distMtime > 0 ? "source is newer than apps/daemon/dist/cli.js" : "apps/daemon/dist/cli.js is missing";
+  await logHandle.write(`\n[tools-dev] building @open-design/daemon because ${reason} at ${new Date().toISOString()}\n`);
+  const invocation = createPackageManagerInvocation(["--filter", "@open-design/daemon", "build"], process.env);
   await runLoggedCommand({
     args: invocation.args,
     command: invocation.command,
