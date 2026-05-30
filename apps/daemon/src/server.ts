@@ -4348,6 +4348,37 @@ export async function startServer({
   });
 
   if (fs.existsSync(STATIC_DIR)) {
+    // Inject the API token into index.html so the web UI can include it
+    // in same-origin /api/* fetch calls.  This is load-bearing for
+    // reverse-proxy deployments (Railway, Fly.io, etc.) where the browser
+    // is not on loopback and the auth middleware would otherwise reject
+    // every API call from the web UI.
+    if (apiToken.length > 0) {
+      const indexHtml = path.join(STATIC_DIR, 'index.html');
+      app.get(['/', '/index.html'], (_req, res, next) => {
+        try {
+          const raw = fs.readFileSync(indexHtml, 'utf-8');
+          const script = [
+            '<script>',
+            `window.__OD_API_TOKEN__=${JSON.stringify(apiToken)};`,
+            '(function(){',
+            'var t=window.__OD_API_TOKEN__,f=window.fetch;',
+            'window.fetch=function(i,o){',
+            'o=o||{};var h=new Headers(o.headers||{}),u=typeof i==="string"?i:i.url;',
+            'if(u&&u.startsWith("/api/")&&!h.has("Authorization")){',
+            'h.set("Authorization","Bearer "+t);',
+            '}',
+            'o.headers=h;return f.call(this,i,o);',
+            '};',
+            '})();',
+            '</script>',
+          ].join('');
+          res.type('html').send(raw.replace('<head>', `<head>${script}`));
+        } catch {
+          next();
+        }
+      });
+    }
     app.use(express.static(STATIC_DIR));
   }
 
