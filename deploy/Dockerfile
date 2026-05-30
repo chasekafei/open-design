@@ -80,9 +80,16 @@ COPY plugins/_official ./plugins/_official
 
 FROM ${RUNTIME_IMAGE}
 
-RUN apk add --no-cache tini su-exec poppler-utils && \
+RUN apk add --no-cache tini su-exec poppler-utils git && \
     addgroup -S -g 1001 open-design && \
-    adduser -S -D -H -u 1001 -G open-design open-design
+    adduser -S -D -h /home/open-design -u 1001 -G open-design open-design
+
+# Claude Code agent runtime (headless, driven by the daemon via
+# --output-format stream-json).  The daemon auto-detects `claude`
+# on PATH at startup.  Requires ANTHROPIC_API_KEY (and optionally
+# ANTHROPIC_BASE_URL for DeepSeek / custom endpoints) set as env
+# vars on the container.
+RUN npm install -g @anthropic-ai/claude-code
 
 WORKDIR /app
 COPY --from=build --chown=open-design:open-design /app/deploy/daemon ./apps/daemon
@@ -104,7 +111,10 @@ RUN mkdir -p /app/.od && \
     chown -R open-design:open-design /app
 
 ENV NODE_ENV=production
-ENV NODE_OPTIONS=--max-old-space-size=192
+# The 192 MB heap limit from docker-compose is removed here because
+# Claude Code needs significantly more memory.  On Railway (8 GB RAM)
+# the default V8 heap is fine; constrain via --max-old-space-size if
+# you deploy to a smaller instance.
 ENV OD_BIND_HOST=0.0.0.0
 ENV OD_PORT=7456
 
