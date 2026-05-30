@@ -80,7 +80,7 @@ COPY plugins/_official ./plugins/_official
 
 FROM ${RUNTIME_IMAGE}
 
-RUN apk add --no-cache tini su-exec poppler-utils && \
+RUN apk add --no-cache tini poppler-utils && \
     addgroup -S -g 1001 open-design && \
     adduser -S -D -H -u 1001 -G open-design open-design
 
@@ -110,8 +110,6 @@ ENV OD_PORT=7456
 
 EXPOSE 7456
 
-# Stay as root so the entrypoint can fix volume permissions (Railway
-# and similar platforms mount volumes as root).  Privileges are dropped
-# to open-design right before the daemon starts.
+USER open-design
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "-c", "chown -R open-design:open-design /app/.od 2>/dev/null || true && exec su-exec open-design node apps/daemon/dist/cli.js --no-open"]
+CMD ["node", "apps/daemon/dist/cli.js", "--no-open"]
