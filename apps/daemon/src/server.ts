@@ -3845,7 +3845,7 @@ export async function startServer({
   // value matching `OD_API_TOKEN`. Health / version / status remain
   // open so monitoring probes don't need the token.
   if (apiToken.length > 0) {
-    const openProbePaths = new Set(['/api/health', '/api/version', '/api/daemon/status']);
+    const openProbePaths = new Set(['/health', '/version', '/daemon/status']);
     app.use('/api', (req, res, next) => {
       if (openProbePaths.has(req.path)) return next();
       // Loopback short-circuit. We ignore the proxied X-Forwarded-For
