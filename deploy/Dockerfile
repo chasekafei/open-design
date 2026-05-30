@@ -86,10 +86,12 @@ RUN apk add --no-cache tini su-exec poppler-utils git && \
 
 # Claude Code agent runtime (headless, driven by the daemon via
 # --output-format stream-json).  The daemon auto-detects `claude`
-# on PATH at startup.  Requires ANTHROPIC_API_KEY (and optionally
+# on PATH at startup.  Requires ANTHROPIC_AUTH_TOKEN (and optionally
 # ANTHROPIC_BASE_URL for DeepSeek / custom endpoints) set as env
 # vars on the container.
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code && \
+    claude --version && \
+    echo "Claude Code installed at $(which claude)"
 
 WORKDIR /app
 COPY --from=build --chown=open-design:open-design /app/deploy/daemon ./apps/daemon
@@ -111,6 +113,10 @@ RUN mkdir -p /app/.od && \
     chown -R open-design:open-design /app
 
 ENV NODE_ENV=production
+# Tell the daemon where to find Claude Code so detection skips PATH
+# scanning.  Set explicitly because su-exec may not propagate npm's
+# global bin directory into the open-design user's PATH.
+ENV CLAUDE_BIN=/usr/local/bin/claude
 # The 192 MB heap limit from docker-compose is removed here because
 # Claude Code needs significantly more memory.  On Railway (8 GB RAM)
 # the default V8 heap is fine; constrain via --max-old-space-size if
