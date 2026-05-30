@@ -131,7 +131,10 @@ function configuredExecutableOverride(
 ): string | null {
   const envKey = AGENT_BIN_ENV_KEYS.get(def?.id);
   if (!envKey) return null;
-  return executableFilePath(configuredEnv?.[envKey]);
+  // Prefer the user-configured path (Settings → Code Agents), then fall
+  // back to the container environment (Docker ENV, Kubernetes ConfigMap,
+  // etc.) so headless deployments don't require Settings UI configuration.
+  return executableFilePath(configuredEnv?.[envKey] ?? process.env[envKey]);
 }
 
 export function resolveAmrOpenCodeExecutable(
