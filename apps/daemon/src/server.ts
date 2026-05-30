@@ -4364,8 +4364,13 @@ export async function startServer({
             '(function(){',
             'var t=window.__OD_API_TOKEN__,f=window.fetch;',
             'window.fetch=function(i,o){',
-            'o=o||{};var h=new Headers(o.headers||{}),u=typeof i==="string"?i:i.url;',
-            'if(u&&u.startsWith("/api/")&&!h.has("Authorization")){',
+            'o=o||{};var h=new Headers(o.headers||{});',
+            'var u=typeof i==="string"?i:i.url;',
+            // Request.url is the fully-resolved URL (includes origin).
+            // Strip the origin so startsWith("/api/") matches both
+            // relative and absolute same-origin URLs.
+            'u=u?u.replace(/^https?:\\/\\/[^/]+/,""):"";',
+            'if(u.startsWith("/api/")&&!h.has("Authorization")){',
             'h.set("Authorization","Bearer "+t);',
             '}',
             'o.headers=h;return f.call(this,i,o);',
