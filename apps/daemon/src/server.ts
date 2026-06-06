@@ -3335,13 +3335,32 @@ function requireLocalDaemonRequest(req, res, next) {
 // strict requireLocalDaemonRequest because the Origin/Authorization
 // they carry is not the user's browser context.
 function requireLocalOrAuthedBrowserRequest(req, res, next) {
+  // Loopback peer (desktop / CLI on the same host). Still run the
+  // full loopback validation so a malicious local origin cannot reach
+  // the handler with a spoofed Host header.
   if (isLoopbackPeerAddress(req.socket?.remoteAddress)) {
+    const validation = validateLocalDaemonRequest(req);
+    if (!validation.ok) {
+      return sendApiError(res, 403, 'FORBIDDEN', validation.message, validation.details ? { details: validation.details } : {});
+    }
     res.setHeader('Vary', 'Origin');
+    if (validation.origin) {
+      res.setHeader('Access-Control-Allow-Origin', validation.origin);
+    }
     return next();
   }
-  if (isLocalSameOrigin(req, resolvedPort)) {
+  // Read port and token from the process env at call time: this
+  // middleware lives at module scope and cannot close over the
+  // `resolvedPort` / `apiToken` constants that `startServer` declares.
+  // Both are process-lifetime, so the per-request env lookup is the
+  // simplest way to stay in sync with the same source of truth the
+  // bearer middleware uses.
+  const envPort = Number.parseInt(process.env.OD_PORT ?? '', 10);
+  const port = Number.isFinite(envPort) && envPort > 0 ? envPort : 7456;
+  if (isLocalSameOrigin(req, port)) {
     const auth = req.get('authorization') ?? '';
     const match = /^Bearer\s+(\S+)\s*$/i.exec(auth);
+    const apiToken = (process.env.OD_API_TOKEN ?? '').trim();
     if (match && match[1] === apiToken) {
       const origin = String(req.headers.origin ?? '');
       if (origin) {
