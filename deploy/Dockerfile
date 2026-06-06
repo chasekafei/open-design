@@ -25,7 +25,12 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY scripts/postinstall.mjs ./scripts/postinstall.mjs
 COPY packages ./packages
 COPY tools ./tools
-COPY apps/daemon/package.json ./apps/daemon/package.json
+# postinstall builds @open-design/daemon (needs tsconfig, bin, and src).
+# Copy only daemon — not the full apps/ tree — so web source changes do not
+# invalidate the dependency-install layer.
+COPY apps/daemon/package.json apps/daemon/tsconfig.json ./apps/daemon/
+COPY apps/daemon/bin ./apps/daemon/bin
+COPY apps/daemon/src ./apps/daemon/src
 COPY apps/web/package.json ./apps/web/package.json
 COPY e2e/package.json ./e2e/package.json
 RUN corepack enable && \
