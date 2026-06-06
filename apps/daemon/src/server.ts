@@ -3323,6 +3323,43 @@ function requireLocalDaemonRequest(req, res, next) {
   next();
 }
 
+// Like requireLocalDaemonRequest, but also accepts a same-origin
+// browser behind a reverse proxy when it presents OD_API_TOKEN. The
+// injected `window.fetch` token wrapper guarantees the web UI has
+// the bearer, so the trust boundary is "loopback peer OR same-origin
+// browser with token". CORS preflight is handled by the reverse
+// proxy in production (most public proxies rewrite OPTIONS), so this
+// middleware only needs to authorize the actual PUT/POST/DELETE.
+//
+// OAuth callbacks and other third-party redirects must keep the
+// strict requireLocalDaemonRequest because the Origin/Authorization
+// they carry is not the user's browser context.
+function requireLocalOrAuthedBrowserRequest(req, res, next) {
+  if (isLoopbackPeerAddress(req.socket?.remoteAddress)) {
+    res.setHeader('Vary', 'Origin');
+    return next();
+  }
+  if (isLocalSameOrigin(req, resolvedPort)) {
+    const auth = req.get('authorization') ?? '';
+    const match = /^Bearer\s+(\S+)\s*$/i.exec(auth);
+    if (match && match[1] === apiToken) {
+      const origin = String(req.headers.origin ?? '');
+      if (origin) {
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      }
+      return next();
+    }
+  }
+  return sendApiError(
+    res,
+    403,
+    'FORBIDDEN',
+    'request must originate from loopback or a same-origin browser with OD_API_TOKEN',
+    {},
+  );
+}
+
 /**
  * Render the small HTML page that the OAuth callback returns to the
  * user's browser tab. It posts a message back to the opener (the
@@ -4493,11 +4530,26 @@ export async function startServer({
     // callers (no Origin) still fall through to the bearer check below,
     // so curl/CLI agents must continue to present the token.
     const ssePathSet = new Set(['/memory/events']);
+    // Plugin preview iframes cannot carry Authorization either — the
+    // browser navigates the iframe via `src` and the per-Fetch-spec
+    // request is unprivileged. The plugin routes are safe-by-design
+    // (sandboxed CSP, no network egress, only static assets the
+    // author ships), so same-origin browser trust is the right
+    // boundary. Pattern covers the three GET endpoints registered
+    // below at /api/plugins/:id/{preview,example/:name,asset/*splat}.
+    const pluginIframePathRe = /^\/plugins\/[^/]+\/(?:preview|example\/[^/]+|asset\/.+)$/u;
     app.use('/api', (req, res, next) => {
       if (openProbePaths.has(req.path)) return next();
       if (
         ssePathSet.has(req.path) &&
         req.method === 'GET' &&
+        isLocalSameOrigin(req, resolvedPort)
+      ) {
+        return next();
+      }
+      if (
+        req.method === 'GET' &&
+        pluginIframePathRe.test(req.path) &&
         isLocalSameOrigin(req, resolvedPort)
       ) {
         return next();
@@ -5388,6 +5440,7 @@ export async function startServer({
     authorizeToolRequest,
     projectsRoot: PROJECTS_DIR,
     requireLocalDaemonRequest,
+    requireLocalOrAuthedBrowserRequest,
     composio: composioConnectorProvider,
   });
 

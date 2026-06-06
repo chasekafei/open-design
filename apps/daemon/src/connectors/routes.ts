@@ -56,6 +56,7 @@ export interface RegisterConnectorRoutesOptions {
   projectsRoot?: string;
   authorizeToolRequest?: (req: Request, res: Response, operation: string) => ToolTokenGrant | null;
   requireLocalDaemonRequest?: RequestHandler;
+  requireLocalOrAuthedBrowserRequest?: RequestHandler;
   composio?: {
     clearDiscoveryCache: () => void;
   };
@@ -528,6 +529,11 @@ function renderConnectorConnectedHtml(connectorId: string): string {
 export function registerConnectorRoutes(app: Express, options: RegisterConnectorRoutesOptions): void {
   const service = options.service ?? connectorService;
   const requireLocalDaemonRequest: RequestHandler = options.requireLocalDaemonRequest ?? ((_req, _res, next) => next());
+  // Same-origin-bearer fallback for routes that the web UI hits
+  // through a reverse proxy. Falls back to requireLocalDaemonRequest
+  // (i.e. loopback-only) when the option is not provided so the
+  // desktop/CLI behavior is preserved in tests.
+  const requireLocalOrAuthedBrowserRequest: RequestHandler = options.requireLocalOrAuthedBrowserRequest ?? requireLocalDaemonRequest;
 
   app.get('/api/connectors', async (_req: Request, res: Response) => {
     try {
@@ -575,7 +581,7 @@ export function registerConnectorRoutes(app: Express, options: RegisterConnector
     }
   });
 
-  app.put('/api/connectors/composio/config', requireLocalDaemonRequest, (req: Request, res: Response) => {
+  app.put('/api/connectors/composio/config', requireLocalOrAuthedBrowserRequest, (req: Request, res: Response) => {
     try {
       const before = readComposioConfig();
       const cfg = writeComposioConfig(req.body);
