@@ -6575,7 +6575,18 @@ export async function startServer({
       });
       res.json(response);
     } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      // AMR is an optional runtime — the vela CLI is not present on
+      // installs that ship without the OpenRouter-backed multi-model
+      // path. Return an empty catalog (the same shape the cache would
+      // return for a brand-new install) so the web UI can render the
+      // non-AMR agents without erroring on initial page load. The web
+      // side already treats an empty `models` array as "no AMR
+      // models to add" (see App.tsx mergeAmrModelsIntoAgents).
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('AMR vela binary could not be resolved')) {
+        return res.json({ source: 'preset', models: [], refreshing: false });
+      }
+      res.status(500).json({ error: message });
     }
   });
 
