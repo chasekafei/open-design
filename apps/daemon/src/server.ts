@@ -4485,8 +4485,23 @@ export async function startServer({
       '/api/version',
       '/daemon/status'
     ]);
+    // Browser SSE endpoints cannot carry Authorization headers
+    // (EventSource spec limitation), so the `window.fetch` token
+    // wrapper below cannot apply. Bypass the bearer check when the
+    // request's Origin is already in the same allowlist the per-route
+    // 403 gates use (see mcp-routes.ts, media-routes.ts). Non-browser
+    // callers (no Origin) still fall through to the bearer check below,
+    // so curl/CLI agents must continue to present the token.
+    const ssePathSet = new Set(['/api/memory/events']);
     app.use('/api', (req, res, next) => {
       if (openProbePaths.has(req.path)) return next();
+      if (
+        ssePathSet.has(req.path) &&
+        req.method === 'GET' &&
+        isLocalSameOrigin(req, resolvedPort)
+      ) {
+        return next();
+      }
       if (req.method === 'GET') {
         const previewAsset = parseProjectPreviewAssetPath(req.path);
         if (
