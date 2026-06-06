@@ -147,6 +147,17 @@ function rpcErrorMessage(raw: unknown): string {
     : message;
 }
 
+function rpcErrorData(raw: unknown): unknown {
+  const obj = asObject(raw);
+  const error = asObject(obj?.error);
+  return error && 'data' in error ? error.data : undefined;
+}
+
+function rpcErrorRetryable(data: unknown): boolean | undefined {
+  const details = asObject(data);
+  return typeof details?.retryable === 'boolean' ? details.retryable : undefined;
+}
+
 interface FormattedUsage {
   input_tokens?: number;
   output_tokens?: number;
@@ -288,32 +299,267 @@ function currentModelFromSessionResult(result: JsonObject): string | null {
 
 export function createJsonLineStream(onMessage: (message: unknown, rawLine: string) => void) {
   let buffer = '';
+  let pendingJson = '';
+  let pendingJsonLineCount = 0;
+
+  const emit = (candidate: string): boolean => {
+    try {
+      onMessage(JSON.parse(candidate), candidate);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const startPendingJson = (line: string) => {
+    pendingJson = line;
+    pendingJsonLineCount = 1;
+  };
+
+  const resetPendingJson = () => {
+    pendingJson = '';
+    pendingJsonLineCount = 0;
+  };
+
+  const handleLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    if (pendingJson) {
+      const nextCandidate = `${pendingJson}\n${trimmed}`;
+      if (emit(nextCandidate)) {
+        resetPendingJson();
+        return;
+      }
+      pendingJsonLineCount += 1;
+      const state = classifyJsonCandidate(nextCandidate);
+      if (
+        state === 'incomplete' &&
+        nextCandidate.length <= 128_000 &&
+        pendingJsonLineCount <= 256
+      ) {
+        pendingJson = nextCandidate;
+        return;
+      }
+      resetPendingJson();
+      handleLine(trimmed);
+      return;
+    }
+    if (emit(trimmed)) return;
+    // ACP is line-delimited JSON-RPC, but a few bridges have emitted
+    // pretty-printed JSON during startup. Keep a bounded aggregate so an
+    // otherwise valid multiline initialize response does not get discarded
+    // line-by-line and leave the session stuck in spawn pending.
+    if (
+      (trimmed.startsWith('{') || trimmed.startsWith('[')) &&
+      classifyJsonCandidate(trimmed) === 'incomplete'
+    ) {
+      startPendingJson(trimmed);
+    }
+  };
+
   return {
     feed(chunk: string) {
       buffer += chunk;
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        try {
-          onMessage(JSON.parse(trimmed), trimmed);
-        } catch {
-          // Ignore non-JSON log lines on stdout.
-        }
+        handleLine(line);
       }
     },
     flush() {
       const trimmed = buffer.trim();
       buffer = '';
-      if (!trimmed) return;
-      try {
-        onMessage(JSON.parse(trimmed), trimmed);
-      } catch {
-        // Ignore trailing non-JSON log lines on stdout.
+      if (trimmed) {
+        handleLine(trimmed);
       }
+      if (pendingJson && emit(pendingJson)) {
+        pendingJson = '';
+      }
+      // Ignore trailing non-JSON log lines on stdout.
     },
   };
+}
+
+function classifyJsonCandidate(value: string): 'complete' | 'incomplete' | 'invalid' {
+  type Frame =
+    | { kind: 'object'; expect: 'keyOrEnd' | 'colon' | 'value' | 'commaOrEnd' }
+    | { kind: 'array'; expect: 'valueOrEnd' | 'commaOrEnd' };
+  const stack: Frame[] = [];
+  let rootComplete = false;
+
+  const afterValue = () => {
+    const parent = stack.at(-1);
+    if (!parent) {
+      rootComplete = true;
+      return;
+    }
+    parent.expect = 'commaOrEnd';
+  };
+
+  const closeFrame = (kind: 'object' | 'array'): boolean => {
+    const current = stack.pop();
+    if (!current || current.kind !== kind) return false;
+    afterValue();
+    return true;
+  };
+
+  const parseString = (start: number): number | null => {
+    for (let index = start + 1; index < value.length; index += 1) {
+      const char = value[index];
+      if (char === '\\') {
+        index += 1;
+        continue;
+      }
+      if (char === '"') return index;
+    }
+    return null;
+  };
+
+  const parseLiteral = (start: number, literal: string): number | null | false => {
+    for (let offset = 0; offset < literal.length; offset += 1) {
+      const char = value[start + offset];
+      if (char === undefined) return null;
+      if (char !== literal[offset]) return false;
+    }
+    return start + literal.length - 1;
+  };
+
+  const parseNumber = (start: number): number | false => {
+    let index = start;
+    if (value[index] === '-') index += 1;
+    if (value[index] === '0') {
+      index += 1;
+    } else if (/[1-9]/.test(value[index] ?? '')) {
+      while (/[0-9]/.test(value[index] ?? '')) index += 1;
+    } else {
+      return false;
+    }
+    if (value[index] === '.') {
+      index += 1;
+      if (!/[0-9]/.test(value[index] ?? '')) return false;
+      while (/[0-9]/.test(value[index] ?? '')) index += 1;
+    }
+    if (value[index] === 'e' || value[index] === 'E') {
+      index += 1;
+      if (value[index] === '+' || value[index] === '-') index += 1;
+      if (!/[0-9]/.test(value[index] ?? '')) return false;
+      while (/[0-9]/.test(value[index] ?? '')) index += 1;
+    }
+    return index - 1;
+  };
+
+  const parseValue = (index: number): number | null | false => {
+    const char = value[index];
+    if (char === '"') {
+      const end = parseString(index);
+      if (end === null) return null;
+      afterValue();
+      return end;
+    }
+    if (char === '{') {
+      stack.push({ kind: 'object', expect: 'keyOrEnd' });
+      return index;
+    }
+    if (char === '[') {
+      stack.push({ kind: 'array', expect: 'valueOrEnd' });
+      return index;
+    }
+    if (char === 't') {
+      const end = parseLiteral(index, 'true');
+      if (end === false || end === null) return end;
+      afterValue();
+      return end;
+    }
+    if (char === 'f') {
+      const end = parseLiteral(index, 'false');
+      if (end === false || end === null) return end;
+      afterValue();
+      return end;
+    }
+    if (char === 'n') {
+      const end = parseLiteral(index, 'null');
+      if (end === false || end === null) return end;
+      afterValue();
+      return end;
+    }
+    if (char === '-' || /[0-9]/.test(char ?? '')) {
+      const end = parseNumber(index);
+      if (end === false) return false;
+      afterValue();
+      return end;
+    }
+    return false;
+  };
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === undefined) break;
+    if (/\s/.test(char)) continue;
+
+    const current = stack.at(-1);
+    if (!current) {
+      if (rootComplete) return 'invalid';
+      const end = parseValue(index);
+      if (end === false) return 'invalid';
+      if (end === null) return 'incomplete';
+      index = end;
+      continue;
+    }
+
+    if (current.kind === 'object') {
+      if (current.expect === 'keyOrEnd') {
+        if (char === '}') {
+          if (!closeFrame('object')) return 'invalid';
+          continue;
+        }
+        if (char !== '"') return 'invalid';
+        const end = parseString(index);
+        if (end === null) return 'incomplete';
+        current.expect = 'colon';
+        index = end;
+        continue;
+      }
+      if (current.expect === 'colon') {
+        if (char !== ':') return 'invalid';
+        current.expect = 'value';
+        continue;
+      }
+      if (current.expect === 'value') {
+        const end = parseValue(index);
+        if (end === false) return 'invalid';
+        if (end === null) return 'incomplete';
+        index = end;
+        continue;
+      }
+      if (char === '}') {
+        if (!closeFrame('object')) return 'invalid';
+        continue;
+      }
+      if (char !== ',') return 'invalid';
+      current.expect = 'keyOrEnd';
+      continue;
+    }
+
+    if (current.expect === 'valueOrEnd') {
+      if (char === ']') {
+        if (!closeFrame('array')) return 'invalid';
+        continue;
+      }
+      const end = parseValue(index);
+      if (end === false) return 'invalid';
+      if (end === null) return 'incomplete';
+      index = end;
+      continue;
+    }
+    if (char === ']') {
+      if (!closeFrame('array')) return 'invalid';
+      continue;
+    }
+    if (char !== ',') return 'invalid';
+    current.expect = 'valueOrEnd';
+  }
+
+  return rootComplete && stack.length === 0 ? 'complete' : 'incomplete';
 }
 
 export async function detectAcpModels({
@@ -457,6 +703,7 @@ export function attachAcpSession({
   let emittedThinkingStart = false;
   let emittedFirstTokenStatus = false;
   let emittedTextChunk = false;
+  let emittedToolCall = false;
   let emittedTextBuffer = '';
   let finished = false;
   let fatal = false;
@@ -504,7 +751,7 @@ export function attachAcpSession({
 
   const fail = (
     message: string,
-    options: { forceModelUnavailable?: boolean } = {},
+    options: { forceModelUnavailable?: boolean; details?: unknown; retryable?: boolean } = {},
   ) => {
     if (finished) return;
     finished = true;
@@ -515,7 +762,19 @@ export function attachAcpSession({
       (options.forceModelUnavailable || isModelUnavailableError(message));
     send(
       'error',
-      useModelUnavailable ? amrModelUnavailablePayload(message) : { message },
+      useModelUnavailable
+        ? amrModelUnavailablePayload(message)
+        : options.details === undefined && options.retryable === undefined
+          ? { message }
+          : {
+              message,
+              error: {
+                code: 'AGENT_EXECUTION_FAILED',
+                message,
+                retryable: options.retryable ?? false,
+                ...(options.details === undefined ? {} : { details: options.details }),
+              },
+            },
     );
     if (!child.killed) child.kill('SIGTERM');
   };
@@ -596,7 +855,12 @@ export function attachAcpSession({
       if (error?.code === -32603 && obj.id !== expectedId) {
         return;
       }
-      fail(rpcErr);
+      const details = rpcErrorData(obj);
+      const retryable = rpcErrorRetryable(details);
+      fail(rpcErr, {
+        details,
+        ...(retryable === undefined ? {} : { retryable }),
+      });
       return;
     }
     if (obj.method === 'session/request_permission') {
@@ -636,6 +900,16 @@ export function attachAcpSession({
             send('agent', { type: 'text_delta', delta });
           }
         }
+        return;
+      }
+      if (
+        update.sessionUpdate === 'tool_call' ||
+        update.sessionUpdate === 'tool_call_update'
+      ) {
+        // The turn did real work (a tool call / file edit), which is valid output even
+        // when the model emits no closing assistant text. Track it so the prompt-complete
+        // handler does not misreport such a turn as "no output / model unavailable".
+        emittedToolCall = true;
         return;
       }
       return;
@@ -689,7 +963,7 @@ export function attachAcpSession({
       return;
     }
     if (promptRequestId !== null && obj.id === promptRequestId) {
-      if (!emittedTextChunk && modelUnavailableErrorCode) {
+      if (!emittedTextChunk && !emittedToolCall && modelUnavailableErrorCode) {
         fail(
           'ACP session completed without producing any assistant text. Refresh the AMR model list, choose a supported model, and retry this run.',
           { forceModelUnavailable: true },

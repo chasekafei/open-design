@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { Button, Textarea } from '@open-design/components';
 import type { ConnectorConnectResponse, ConnectorDetail, ConnectorStatusResponse } from '@open-design/contracts';
 import { streamViaDaemon } from '../providers/daemon';
 import {
@@ -14,6 +15,7 @@ import {
   fetchProjectDesignSystemPackageAudit,
   fetchDesignSystemRevisions,
   openFolderDialog,
+  startDesignSystemTokenContractRebuildJob,
   updateDesignSystemRevisionStatus,
   updateDesignSystemDraft,
   uploadProjectFile,
@@ -62,6 +64,8 @@ import type {
 } from '../types';
 import { decideAutoOpenAfterWrite } from './auto-open-file';
 import { ChatPane } from './ChatPane';
+import { notifyConnectorsChanged } from './connectors-events';
+import { connectorAuthSnapshotChanged } from './connectors-state';
 import { FileWorkspace } from './FileWorkspace';
 import { Icon, type IconName } from './Icon';
 import { Spinner } from './Loading';
@@ -159,6 +163,8 @@ interface DetailProps {
   onSetDefault: (id: string) => void;
   onSystemsRefresh?: () => Promise<void> | void;
   onProjectsRefresh?: () => Promise<void> | void;
+  initialRevisionJob?: DesignSystemGenerationJob | null;
+  onInitialRevisionJobConsumed?: (jobId: string) => void;
 }
 
 type SetupStep = 'setup' | 'confirm';
@@ -311,6 +317,8 @@ export function DesignSystemCreationFlow({
   const [githubAuthorizationUrl, setGithubAuthorizationUrl] = useState<string | null>(null);
   const githubConnectorRefreshId = useRef(0);
   const githubConnectorRequestInFlight = useRef(false);
+  const githubConnectorRef = useRef<ConnectorDetail | null>(null);
+  const githubConnectorLoadedRef = useRef(false);
   const embedded = chrome === 'embedded';
 
   // DS create page_view (v2 doc). Only fires for the standalone
@@ -363,6 +371,8 @@ export function DesignSystemCreationFlow({
       githubConnectorRefreshId.current += 1;
       githubConnectorRequestInFlight.current = false;
       setGithubConnector(null);
+      githubConnectorRef.current = null;
+      githubConnectorLoadedRef.current = false;
       setGithubConnectorLoading(false);
       setGithubConnectorError(null);
       setGithubAuthorizationPending(false);
@@ -377,7 +387,13 @@ export function DesignSystemCreationFlow({
     try {
       const { connector, timedOut } = await fetchGithubConnectorStatusWithTimeout();
       if (githubConnectorRefreshId.current !== refreshId) return;
+      const statusChanged =
+        githubConnectorLoadedRef.current &&
+        connectorAuthSnapshotChanged(githubConnectorRef.current, connector);
       setGithubConnector(connector);
+      githubConnectorRef.current = connector;
+      githubConnectorLoadedRef.current = true;
+      if (statusChanged) notifyConnectorsChanged();
       if (connector?.status === 'connected') {
         setGithubAuthorizationPending(false);
         setGithubAuthorizationUrl(null);
@@ -435,10 +451,15 @@ export function DesignSystemCreationFlow({
     try {
       const result = await connectConnector(GITHUB_CONNECTOR_ID);
       if (result.error) setGithubConnectorError(result.error);
-      if (result.connector) setGithubConnector(result.connector);
+      if (result.connector) {
+        setGithubConnector(result.connector);
+        githubConnectorRef.current = result.connector;
+        githubConnectorLoadedRef.current = true;
+      }
       if (result.auth?.redirectUrl) setGithubAuthorizationUrl(result.auth.redirectUrl);
       if (isPendingConnectorAuth(result.auth)) setGithubAuthorizationPending(true);
       if (result.auth?.kind === 'connected' || result.connector?.status === 'connected') {
+        notifyConnectorsChanged();
         setGithubConnectorError(null);
         setGithubAuthorizationPending(false);
         setGithubAuthorizationUrl(null);
@@ -456,7 +477,11 @@ export function DesignSystemCreationFlow({
     setGithubConnectorError(null);
     try {
       const connector = await disconnectConnector(GITHUB_CONNECTOR_ID);
+      const statusChanged = connector != null && connectorAuthSnapshotChanged(githubConnectorRef.current, connector);
       setGithubConnector(connector);
+      githubConnectorRef.current = connector;
+      githubConnectorLoadedRef.current = true;
+      if (statusChanged) notifyConnectorsChanged();
       setGithubAuthorizationPending(false);
       setGithubAuthorizationUrl(null);
     } catch (err) {
@@ -651,19 +676,18 @@ export function DesignSystemCreationFlow({
           <h1>It will take about 5 minutes to generate your design system.</h1>
           <p>You can step away. Keep the tab open in the background.</p>
           <div className="ds-setup-actions">
-            <button type="button" className="ghost" onClick={() => setStep('setup')}>
+            <Button variant="ghost" onClick={() => setStep('setup')}>
               <Icon name="arrow-left" />
               Back
-            </button>
-            <button
-              type="button"
-              className="primary"
+            </Button>
+            <Button
+              variant="primary"
               disabled={generationStarting}
               onClick={() => void generate()}
             >
               <Icon name="sparkles" />
               {generationStarting ? 'Opening project...' : 'Generate'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -687,16 +711,15 @@ export function DesignSystemCreationFlow({
       ) : null}
       {embedded ? null : (
         <header className="ds-setup-topbar">
-          <button type="button" className="ghost" onClick={onBack}>
+          <Button variant="ghost" onClick={onBack}>
             <Icon name="arrow-left" />
             Back
-          </button>
+          </Button>
           <span className="ds-setup-mark">
             <Icon name="blocks" />
           </span>
-          <button
-            type="button"
-            className="primary"
+          <Button
+            variant="primary"
             disabled={!state.company.trim()}
             onClick={() => {
               if (!state.company.trim()) {
@@ -708,7 +731,7 @@ export function DesignSystemCreationFlow({
           >
             Continue to generation
             <Icon name="chevron-right" />
-          </button>
+          </Button>
         </header>
       )}
 
@@ -842,7 +865,7 @@ export function DesignSystemCreationFlow({
         {embedded ? null : (
           <label className="ds-setup-field">
             <span>Notes</span>
-            <textarea
+            <Textarea
               rows={4}
               value={state.notes}
               onChange={(event) => setState((curr) => ({ ...curr, notes: event.target.value }))}
@@ -853,13 +876,12 @@ export function DesignSystemCreationFlow({
         {error ? <div className="ds-editor-error">{error}</div> : null}
         {embedded ? (
           <div className="ds-setup-actions ds-setup-actions--embedded">
-            <button type="button" className="ghost" onClick={onBack}>
+            <Button variant="ghost" onClick={onBack}>
               <Icon name="arrow-left" />
               Back
-            </button>
-            <button
-              type="button"
-              className="primary"
+            </Button>
+            <Button
+              variant="primary"
               disabled={!state.company.trim()}
               onClick={() => {
                 if (!state.company.trim()) {
@@ -871,7 +893,7 @@ export function DesignSystemCreationFlow({
             >
               Generate
               <Icon name="chevron-right" />
-            </button>
+            </Button>
           </div>
         ) : null}
       </main>
@@ -889,6 +911,8 @@ export function DesignSystemDetailView({
   onSetDefault,
   onSystemsRefresh,
   onProjectsRefresh,
+  initialRevisionJob,
+  onInitialRevisionJobConsumed,
 }: DetailProps) {
   const { locale } = useI18n();
   const [system, setSystem] = useState<DesignSystemDetail | null>(null);
@@ -901,6 +925,7 @@ export function DesignSystemDetailView({
   const [revisionJob, setRevisionJob] = useState<DesignSystemGenerationJob | null>(null);
   const [revisions, setRevisions] = useState<DesignSystemRevision[]>([]);
   const [reviewDecisions, setReviewDecisions] = useState<Record<string, 'good' | 'work'>>({});
+  const [tokenRebuildBusy, setTokenRebuildBusy] = useState(false);
   const [feedbackSection, setFeedbackSection] = useState<string | null>(null);
   const [chatSeed, setChatSeed] = useState<{ id: string; text: string } | null>(null);
   const [workspaceProjectId, setWorkspaceProjectId] = useState<string | null>(null);
@@ -954,6 +979,17 @@ export function DesignSystemDetailView({
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (!initialRevisionJob?.id) return;
+    setRevisionJob((current) =>
+      current?.id === initialRevisionJob.id ? current : initialRevisionJob,
+    );
+    if (initialRevisionJob.kind === 'token-contract-rebuild') {
+      setStatusLine('Token contract rebuild started');
+    }
+    onInitialRevisionJobConsumed?.(initialRevisionJob.id);
+  }, [initialRevisionJob, onInitialRevisionJobConsumed]);
 
   useEffect(() => {
     if (!system) return undefined;
@@ -1740,6 +1776,27 @@ export function DesignSystemDetailView({
     }
   }
 
+  async function startTokenContractRebuild(force = false) {
+    if (!system || tokenRebuildBusy) return;
+    setTokenRebuildBusy(true);
+    setStatusLine(null);
+    try {
+      const result = await startDesignSystemTokenContractRebuildJob(system.id, { force });
+      if (!result) {
+        setStatusLine('Could not start token contract rebuild');
+        return;
+      }
+      if (result.job) {
+        setRevisionJob(result.job);
+        setStatusLine('Token contract rebuild started');
+        return;
+      }
+      setStatusLine(result.decision.reason);
+    } finally {
+      setTokenRebuildBusy(false);
+    }
+  }
+
   if (!system) {
     return (
       <div className="ds-setup-shell ds-setup-shell--center">
@@ -1777,6 +1834,11 @@ export function DesignSystemDetailView({
             initialDraft={chatSeed?.text}
             conversations={conversations}
             activeConversationId={activeConversationId}
+            // Intentionally omit `messagesConversationId`: the loader above does
+            // not retag `projectChatMessages` during a conversation switch, so
+            // trusting the live length would show the previous conversation's
+            // count for the newly active row. Fall back to the persisted
+            // `conversation.messageCount` for a stable list count instead.
             onSelectConversation={setActiveConversationId}
             onDeleteConversation={() => {}}
             onNewConversation={createProjectChatConversation}
@@ -1786,10 +1848,10 @@ export function DesignSystemDetailView({
 
       <main className="ds-review-main">
         <header className="ds-review-tabs">
-          <button type="button" className="ghost" onClick={onBack}>
+          <Button variant="ghost" onClick={onBack}>
             <Icon name="arrow-left" />
             Back
-          </button>
+          </Button>
           <div className="segmented">
             <button
               type="button"
@@ -1806,9 +1868,9 @@ export function DesignSystemDetailView({
               Design Files
             </button>
           </div>
-          <button type="button" className="ghost">
+          <Button variant="ghost">
             Share
-          </button>
+          </Button>
         </header>
 
         {tab === 'system' ? (
@@ -1819,9 +1881,11 @@ export function DesignSystemDetailView({
             <div className="ds-publish-card">
               <p>
                 {generationActive
-                  ? activeJob?.kind === 'revision'
-                    ? 'Open Design is applying your feedback. You can keep reviewing while the updated draft is prepared.'
-                    : 'Open Design is still working, but you can start giving feedback on the work so far.'
+                  ? activeJob?.kind === 'token-contract-rebuild'
+                    ? 'Open Design is preparing a token contract rebuild for review. The active contract stays unchanged until you accept it.'
+                    : activeJob?.kind === 'revision'
+                      ? 'Open Design is applying your feedback. You can keep reviewing while the updated draft is prepared.'
+                      : 'Open Design is still working, but you can start giving feedback on the work so far.'
                   : 'Open Design is ready for review. Give feedback on the work so far, then publish when it is useful for future projects.'}
               </p>
               <label>
@@ -1834,9 +1898,9 @@ export function DesignSystemDetailView({
                 Published
               </label>
               {selectedId !== system.id ? (
-                <button
-                  type="button"
-                  className="ghost compact"
+                <Button
+                  variant="ghost"
+                  className="compact"
                   onClick={() => {
                     const statusBefore = mapDsStatusToTracking(system.status);
                     onSetDefault(system.id);
@@ -1856,20 +1920,25 @@ export function DesignSystemDetailView({
                   }}
                 >
                   Make default
-                </button>
+                </Button>
               ) : null}
             </div>
-            <DesignSystemPackageCard system={system} />
+            <DesignSystemPackageCard
+              system={system}
+              busy={tokenRebuildBusy || generationActive}
+              onRebuildTokenContract={() => void startTokenContractRebuild(false)}
+              onForceRebuildTokenContract={() => void startTokenContractRebuild(true)}
+            />
             <div className="ds-warning-card">
               <Icon name="help-circle" />
               <span>
                 <strong>Missing brand fonts</strong>
                 Open Design is rendering typography with substitute web fonts.
               </span>
-              <button type="button" className="ghost compact">
+              <Button variant="ghost" className="compact">
                 <Icon name="upload" />
                 Upload fonts
-              </button>
+              </Button>
             </div>
             {statusLine ? <div className="ds-status-line">{statusLine}</div> : null}
             <WorkspaceActivityCard message={workspaceActivityMessage} active={chatStreaming} />
@@ -1939,16 +2008,16 @@ export function DesignSystemDetailView({
             </div>
             <label className="ds-body-editor">
               DESIGN.md
-              <textarea
+              <Textarea
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
                 rows={16}
                 disabled={!editable}
               />
             </label>
-            <button type="button" className="primary" disabled={!editable || saving} onClick={() => void saveBody()}>
+            <Button variant="primary" disabled={!editable || saving} onClick={() => void saveBody()}>
               Save DESIGN.md
-            </button>
+            </Button>
             {recentRevisions.length > 0 ? <RevisionHistoryList revisions={recentRevisions} /> : null}
           </div>
         ) : (
@@ -2057,6 +2126,9 @@ function designSystemAssistantMessage(
 ): string {
   const summary = system?.summary?.trim();
   if (generationActive) {
+    if (activeJob?.kind === 'token-contract-rebuild') {
+      return 'I am preparing a token contract rebuild for review. The active contract will stay unchanged until the revision is accepted.';
+    }
     if (activeJob?.kind === 'revision') {
       return 'I am applying your feedback to the design system. You can keep reviewing the current draft while the revision runs.';
     }
@@ -2091,20 +2163,33 @@ function findWorkspaceActivityMessage(messages: ChatMessage[]): ChatMessage | nu
   return null;
 }
 
-function DesignSystemPackageCard({ system }: { system: DesignSystemDetail }) {
+function DesignSystemPackageCard({
+  system,
+  busy,
+  onRebuildTokenContract,
+  onForceRebuildTokenContract,
+}: {
+  system: DesignSystemDetail;
+  busy: boolean;
+  onRebuildTokenContract: () => void;
+  onForceRebuildTokenContract: () => void;
+}) {
   const info = system.packageInfo;
   const manifest = info?.manifest;
   const evidence = info?.sourceEvidence;
+  const tokenContract = evidence?.tokenContract;
   const sourceLabel = manifest?.source?.type ? sourceTypeLabel(manifest.source.type) : sourceTypeLabel(system.source);
   const previewPages = manifest?.preview?.pages ?? [];
   const sourceFiles = manifest?.sourceFiles;
-  const sourceFileCount = [sourceFiles?.scanned, sourceFiles?.evidence, sourceFiles?.tokens, sourceFiles?.snippets]
+  const sourceFileCount = [sourceFiles?.scanned, sourceFiles?.evidence, sourceFiles?.tokens, sourceFiles?.report, sourceFiles?.snippets]
     .filter(Boolean)
     .length;
   const protocolItems = [
     manifest?.usage ? manifest.usage : null,
     manifest?.files?.design ?? 'DESIGN.md',
     manifest?.files?.tokens ?? 'tokens.css',
+    manifest?.files?.designTokens,
+    manifest?.files?.tailwind,
     manifest?.files?.components,
     manifest?.componentsManifest,
   ].filter((item): item is string => typeof item === 'string' && item.length > 0);
@@ -2112,6 +2197,7 @@ function DesignSystemPackageCard({ system }: { system: DesignSystemDetail }) {
     evidence?.scannedFileCount !== undefined ? { label: 'Scanned files', value: String(evidence.scannedFileCount) } : null,
     evidence?.tokenCount !== undefined ? { label: 'Source tokens', value: String(evidence.tokenCount) } : null,
     evidence?.snippetCount !== undefined ? { label: 'Snippets', value: String(evidence.snippetCount) } : null,
+    tokenContract?.fallbackTokens !== undefined ? { label: 'Fallback tokens', value: String(tokenContract.fallbackTokens) } : null,
     manifest?.fonts?.length ? { label: 'Fonts', value: String(manifest.fonts.length) } : null,
   ].filter((item): item is { label: string; value: string } => item !== null);
   const confidence = evidence?.confidence ? Object.entries(evidence.confidence) : [];
@@ -2131,6 +2217,40 @@ function DesignSystemPackageCard({ system }: { system: DesignSystemDetail }) {
           {manifest ? 'Hybrid ready' : 'Fallback'}
         </span>
       </div>
+      {manifest?.sourceFiles?.report ? (
+        <div className="ds-token-contract-row">
+          <span>
+            <strong>Token contract</strong>
+            <small>
+              {tokenContract?.grade ? `${tokenContract.grade} · ` : ''}
+              {tokenContract?.score !== undefined ? `score ${tokenContract.score}` : 'quality report available'}
+              {tokenContract?.recommendRebuild ? ' · rebuild recommended' : ''}
+            </small>
+          </span>
+          <div>
+            <Button
+              variant="ghost"
+              className="compact"
+              disabled={busy}
+              onClick={onRebuildTokenContract}
+            >
+              <Icon name="sparkles" />
+              Rebuild token contract
+            </Button>
+            {tokenContract?.recommendRebuild ? null : (
+              <Button
+                variant="ghost"
+                className="compact"
+                disabled={busy}
+                onClick={onForceRebuildTokenContract}
+              >
+                <Icon name="refresh" />
+                Force
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <div className="ds-package-grid">
         <div>
@@ -2186,6 +2306,7 @@ function DesignSystemPackageCard({ system }: { system: DesignSystemDetail }) {
               sourceFiles?.scanned ? { path: sourceFiles.scanned, meta: 'Scanned file inventory' } : null,
               sourceFiles?.evidence ? { path: sourceFiles.evidence, meta: 'Evidence notes' } : null,
               sourceFiles?.tokens ? { path: sourceFiles.tokens, meta: 'Token extraction evidence' } : null,
+              sourceFiles?.report ? { path: sourceFiles.report, meta: 'Token contract quality report' } : null,
               sourceFiles?.snippets ? { path: sourceFiles.snippets, meta: 'Snippet index' } : null,
             ].filter((item): item is { path: string; meta: string } => item !== null)}
           />
@@ -2467,7 +2588,11 @@ function SourceContextCard({ provenance }: { provenance?: DesignSystemProvenance
 
 function GenerationStatusCard({ job }: { job: DesignSystemGenerationJob }) {
   const active = job.status === 'queued' || job.status === 'running';
-  const noun = job.kind === 'revision' ? 'Revision' : 'Generation';
+  const noun = job.kind === 'token-contract-rebuild'
+    ? 'Token rebuild'
+    : job.kind === 'revision'
+      ? 'Revision'
+      : 'Generation';
   return (
     <div className={`ds-generation-review-card is-${job.status}`}>
       <div>
@@ -2475,9 +2600,11 @@ function GenerationStatusCard({ job }: { job: DesignSystemGenerationJob }) {
         <span>
           <strong>
             {active
-              ? job.kind === 'revision'
-                ? 'Open Design is revising'
-                : 'Open Design is still working'
+              ? job.kind === 'token-contract-rebuild'
+                ? 'Open Design is rebuilding tokens'
+                : job.kind === 'revision'
+                  ? 'Open Design is revising'
+                  : 'Open Design is still working'
               : job.status === 'failed'
                 ? `${noun} needs attention`
                 : `${noun} completed`}
@@ -2485,9 +2612,11 @@ function GenerationStatusCard({ job }: { job: DesignSystemGenerationJob }) {
           <small>
             {job.message
               ?? (active
-                ? job.kind === 'revision'
-                  ? 'Applying your feedback.'
-                  : 'Preparing the remaining files.'
+                ? job.kind === 'token-contract-rebuild'
+                  ? 'Preparing a reviewable token contract draft.'
+                  : job.kind === 'revision'
+                    ? 'Applying your feedback.'
+                    : 'Preparing the remaining files.'
                 : 'Review workspace is ready.')}
           </small>
         </span>
@@ -2552,6 +2681,14 @@ function RevisionDiffCard({
         <span>Proposed changes</span>
         <pre>{diff || revision.proposedBody}</pre>
       </div>
+      {revision.fileChanges?.length ? (
+        <div className="ds-revision-diff">
+          <span>File draft preview</span>
+          {revision.fileChanges.map((change) => (
+            <pre key={change.path}>{`${change.path}\n\n${revisionFileAddedText(change) || change.proposedContent}`}</pre>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -2734,9 +2871,9 @@ function DropZone({
           <span>{names.length > 0 && !onRemoveName ? names.join(', ') : prompt}</span>
         </label>
         {onBrowseFolder ? (
-          <button type="button" className="ghost" onClick={onBrowseFolder}>
+          <Button variant="ghost" onClick={onBrowseFolder}>
             Browse folder
-          </button>
+          </Button>
         ) : null}
       </div>
       {names.length > 0 && onRemoveName ? (
@@ -2923,24 +3060,24 @@ function GitHubRepositoryAccessPanel({
   }
 
   const composioAction = !composioConfigured ? (
-    <button type="button" className="ghost" onClick={onOpenConnectorsTab}>
+    <Button variant="ghost" onClick={onOpenConnectorsTab}>
       Configure Composio
-    </button>
+    </Button>
   ) : connected || authorizationPending ? (
     <>
       {authorizationPending && authorizationUrl ? (
-        <button type="button" className="ghost" disabled={busy} onClick={onOpenAuthorization}>
+        <Button variant="ghost" disabled={busy} onClick={onOpenAuthorization}>
           Open authorization
-        </button>
+        </Button>
       ) : null}
-      <button type="button" className="ghost" disabled={busy} onClick={onDisconnect}>
+      <Button variant="ghost" disabled={busy} onClick={onDisconnect}>
         {action === 'disconnect' ? 'Disconnecting...' : 'Disconnect'}
-      </button>
+      </Button>
     </>
   ) : (
-    <button type="button" className="ghost" disabled={busy} onClick={onConnect}>
+    <Button variant="ghost" disabled={busy} onClick={onConnect}>
       {action === 'connect' ? 'Connecting...' : 'Connect via Composio'}
-    </button>
+    </Button>
   );
 
   const methods: GitHubAccessMethod[] = [
@@ -3054,6 +3191,22 @@ function formatDateTime(value: string): string {
 function revisionAddedText(revision: DesignSystemRevision): string {
   const baseLines = revision.baseBody.split(/\r?\n/);
   const proposedLines = revision.proposedBody.split(/\r?\n/);
+  let index = 0;
+  while (
+    index < baseLines.length
+    && index < proposedLines.length
+    && baseLines[index] === proposedLines[index]
+  ) {
+    index += 1;
+  }
+  return proposedLines.slice(index).join('\n').trim();
+}
+
+function revisionFileAddedText(
+  change: NonNullable<DesignSystemRevision['fileChanges']>[number],
+): string {
+  const baseLines = change.baseContent.split(/\r?\n/);
+  const proposedLines = change.proposedContent.split(/\r?\n/);
   let index = 0;
   while (
     index < baseLines.length

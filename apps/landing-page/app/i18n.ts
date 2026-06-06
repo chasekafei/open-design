@@ -176,6 +176,20 @@ export interface HeaderCopy {
     /** External community / contributors page (currently a Vercel deploy). */
     community: string;
     contact: string;
+    /** Community dropdown sub-items. */
+    contributors: string;
+    ambassadors: string;
+    moderators: string;
+    /** Top-level dropdown for SEO solution/use-case/comparison pages. */
+    solution: string;
+    /** Top-level dropdown listing supported coding agents. */
+    agent: string;
+    /** Top-level dropdown for blog, tutorials, downloads. */
+    resources: string;
+    /** Group label inside the Solution dropdown. */
+    useCases: string;
+    /** Group label inside the Solution dropdown. */
+    roles: string;
   };
   download: string;
   downloadAria: string;
@@ -192,6 +206,11 @@ export interface HeaderProductMenuCopy {
   openDesignBlurb: string;
   htmlAnythingName: string;
   htmlAnythingBlurb: string;
+  htmlVideoName: string;
+  htmlVideoBlurb: string;
+  amrName: string;
+  amrKicker: string;
+  amrBlurb: string;
   tutorialsName: string;
   tutorialsBlurb: string;
 }
@@ -217,6 +236,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'The agentic design surface: skills, systems, templates.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / data to ship-ready HTML, by your local agent.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'A prompt, article, or repo to a real MP4 — by your local agent.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Design Agent',
+    amrBlurb: 'Professional design Agent, zero-config use, built-in SOTA models & Harness',
     tutorialsName: 'Tutorials',
     tutorialsBlurb: 'Video walkthroughs, demos, and community reviews.',
   },
@@ -227,6 +251,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Agent 原生设计工作台：Skill、设计系统、模板。',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / 数据变成可交付 HTML，由本地 Agent 完成。',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: '一个 prompt、文章或仓库，变成真实 MP4——由你的本地 Agent 完成。',
+    amrName: 'Open Design AMR',
+    amrKicker: '设计 Agent',
+    amrBlurb: '专业设计Agent、零配置使用、自带SOTA模型与Harness',
     tutorialsName: '教程',
     tutorialsBlurb: '视频上手、演示与社区评测。',
   },
@@ -237,6 +266,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Agent 原生設計工作台：Skill、設計系統、模板。',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / 資料變成可交付 HTML，由本地 Agent 完成。',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: '一個 prompt、文章或倉庫，變成真實 MP4——由你的本地 Agent 完成。',
+    amrName: 'Open Design AMR',
+    amrKicker: '設計 Agent',
+    amrBlurb: '專業設計 Agent、零配置使用、內建 SOTA 模型與 Harness',
     tutorialsName: '教學',
     tutorialsBlurb: '影片上手、演示與社群評測。',
   },
@@ -247,6 +281,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Agent ネイティブのデザイン面: Skill、システム、テンプレート。',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / データをローカル Agent で納品可能な HTML へ。',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'プロンプト、記事、リポジトリを本物のMP4に — あなたのローカルエージェントで。',
+    amrName: 'Open Design AMR',
+    amrKicker: 'デザイン Agent',
+    amrBlurb: 'プロ向けデザイン Agent、ゼロ設定で利用、SOTA モデルと Harness 内蔵',
     tutorialsName: 'チュートリアル',
     tutorialsBlurb: '動画ガイド、デモ、コミュニティレビュー。',
   },
@@ -257,6 +296,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Agent 네이티브 디자인 작업면: Skill, 시스템, 템플릿.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / 데이터를 로컬 Agent로 배포 가능한 HTML로 변환.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: '프롬프트, 글, 레포만 있으면 — 로컬 에이전트가 진짜 MP4로.',
+    amrName: 'Open Design AMR',
+    amrKicker: '디자인 Agent',
+    amrBlurb: '전문 디자인 Agent, 무설정 사용, SOTA 모델과 Harness 내장',
     tutorialsName: '튜토리얼',
     tutorialsBlurb: '영상 가이드, 데모, 커뮤니티 리뷰.',
   },
@@ -267,6 +311,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Agentische Designoberfläche: Skills, Systeme, Vorlagen.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / Daten werden durch deinen lokalen Agent zu fertigem HTML.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Eine Idee, ein Artikel oder ein Repo – per lokalem Agent zu einem echten MP4.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Design-Agent',
+    amrBlurb: 'Professioneller Design-Agent, null Konfiguration, integrierte SOTA-Modelle & Harness',
     tutorialsName: 'Tutorials',
     tutorialsBlurb: 'Videoanleitungen, Demos und Community-Reviews.',
   },
@@ -277,6 +326,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Surface de design agentique : skills, systèmes, modèles.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / données vers du HTML prêt à livrer via votre agent local.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Une consigne, un article ou un repo vers une vraie vidéo MP4 — par votre agent local.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Agent design',
+    amrBlurb: 'Agent de design professionnel, zéro configuration, modèles SOTA et Harness intégrés',
     tutorialsName: 'Tutoriels',
     tutorialsBlurb: 'Guides vidéo, démos et avis de la communauté.',
   },
@@ -287,6 +341,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Agent-native дизайн-среда: skills, системы, шаблоны.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / данные в готовый HTML через локального Agent.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Промпт, статья или репозиторий — в настоящий MP4 с помощью локального агента.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Дизайн-Agent',
+    amrBlurb: 'Профессиональный дизайн-Agent, без настройки, со встроенными SOTA-моделями и Harness',
     tutorialsName: 'Руководства',
     tutorialsBlurb: 'Видеоразборы, демо и обзоры сообщества.',
   },
@@ -297,6 +356,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Superficie de diseño agentic: skills, sistemas, plantillas.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / datos a HTML listo para entregar con tu Agent local.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Una idea, artículo o repo a un MP4 real — con tu agente local.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Agent diseño',
+    amrBlurb: 'Agent de diseño profesional, uso sin configuración, modelos SOTA y Harness integrados',
     tutorialsName: 'Tutoriales',
     tutorialsBlurb: 'Guías en video, demos y reseñas de la comunidad.',
   },
@@ -307,6 +371,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Superfície de design agentic: skills, sistemas, templates.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / dados viram HTML pronto com seu Agent local.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Uma ideia, artigo ou repo vira um MP4 de verdade — pelo seu agente local.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Agent design',
+    amrBlurb: 'Agent de design profissional, uso sem configuração, modelos SOTA e Harness integrados',
     tutorialsName: 'Tutoriais',
     tutorialsBlurb: 'Guias em vídeo, demos e avaliações da comunidade.',
   },
@@ -317,6 +386,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Superficie di design agentic: skill, sistemi, template.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / dati in HTML pronto alla consegna con il tuo Agent locale.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Una richiesta, un articolo o un repo in un vero MP4 — dal tuo agente locale.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Agent design',
+    amrBlurb: 'Agent di design professionale, uso senza configurazione, modelli SOTA e Harness integrati',
     tutorialsName: 'Tutorial',
     tutorialsBlurb: 'Guide video, demo e recensioni della community.',
   },
@@ -327,6 +401,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Bề mặt thiết kế agentic: skill, hệ thống, mẫu.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / dữ liệu thành HTML sẵn sàng giao bằng Agent cục bộ.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Một prompt, bài viết hay repo thành video MP4 thật — bằng agent của bạn.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Agent thiết kế',
+    amrBlurb: 'Agent thiết kế chuyên nghiệp, dùng không cần cấu hình, tích hợp mô hình SOTA và Harness',
     tutorialsName: 'Hướng dẫn',
     tutorialsBlurb: 'Video hướng dẫn, demo và đánh giá cộng đồng.',
   },
@@ -337,6 +416,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Agentic powierzchnia projektowa: skills, systemy, szablony.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / dane do gotowego HTML przez lokalnego Agent.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Prompt, artykuł lub repo w prawdziwe MP4 — dzięki Twojemu lokalnemu agentowi.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Agent designu',
+    amrBlurb: 'Profesjonalny Agent do projektowania, zero konfiguracji, wbudowane modele SOTA i Harness',
     tutorialsName: 'Poradniki',
     tutorialsBlurb: 'Wideo, dema i recenzje społeczności.',
   },
@@ -347,6 +431,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Ruang desain agentic: skill, sistem, template.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / data menjadi HTML siap kirim lewat Agent lokal.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Prompt, artikel, atau repo jadi MP4 sungguhan — lewat agent lokalmu.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Agent desain',
+    amrBlurb: 'Agent desain profesional, tanpa konfigurasi, model SOTA dan Harness bawaan',
     tutorialsName: 'Tutorial',
     tutorialsBlurb: 'Panduan video, demo, dan ulasan komunitas.',
   },
@@ -357,6 +446,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Agentic designoppervlak: skills, systemen, templates.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / data naar opleverklare HTML via je lokale Agent.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Een prompt, artikel of repo naar een echte MP4 — door je lokale agent.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Design-Agent',
+    amrBlurb: 'Professionele design-Agent, nul configuratie, ingebouwde SOTA-modellen en Harness',
     tutorialsName: 'Tutorials',
     tutorialsBlurb: 'Videogidsen, demo’s en communityreviews.',
   },
@@ -367,6 +461,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'مساحة تصميم وكيلة: المهارات والأنظمة والقوالب.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / البيانات إلى HTML جاهز عبر Agent المحلي.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'موجِّه أو مقال أو مستودع إلى فيديو MP4 حقيقي — بواسطة وكيلك المحلي.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Agent تصميم',
+    amrBlurb: 'Agent تصميم احترافي، استخدام بلا إعداد، نماذج SOTA و Harness مدمجة',
     tutorialsName: 'الدروس',
     tutorialsBlurb: 'شروحات فيديو وعروض وتجارب من المجتمع.',
   },
@@ -377,6 +476,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Agentic tasarım yüzeyi: skill, sistemler, şablonlar.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / veriler yerel Agent ile teslim edilebilir HTML olur.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Bir prompt, makale ya da repo\'dan gerçek bir MP4\'e — yerel ajanınla.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Tasarım Agent',
+    amrBlurb: 'Profesyonel tasarım Agent, sıfır yapılandırma, yerleşik SOTA modelleri ve Harness',
     tutorialsName: 'Eğitimler',
     tutorialsBlurb: 'Video anlatımlar, demolar ve topluluk incelemeleri.',
   },
@@ -387,6 +491,11 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     openDesignBlurb: 'Agent-native дизайн-поверхня: skills, системи, шаблони.',
     htmlAnythingName: 'HTML Anything',
     htmlAnythingBlurb: 'Markdown / дані у готовий HTML через локального Agent.',
+    htmlVideoName: 'HTML Video',
+    htmlVideoBlurb: 'Підказка, стаття чи репозиторій — у справжнє MP4 від вашого локального агента.',
+    amrName: 'Open Design AMR',
+    amrKicker: 'Дизайн-Agent',
+    amrBlurb: 'Професійний дизайн-Agent, без налаштувань, із вбудованими SOTA-моделями та Harness',
     tutorialsName: 'Навчальні матеріали',
     tutorialsBlurb: 'Відеоінструкції, демо та огляди спільноти.',
   },
@@ -416,6 +525,7 @@ export interface HomePageCopy {
     titleEmphasis: string;
     titleMiddle: string;
     titleSecondEmphasis: string;
+    titleBreakAfterEmphasis?: boolean;
     lead: (skills: string, systems: string) => string;
     star: string;
     download: string;
@@ -642,6 +752,24 @@ export interface HomePageCopy {
     titleMiddle: string;
     titleSuffix: string;
   };
+  /*
+   * AMR band — the "Open Design AMR" model band. The product name "AMR"
+   * and the vendor/model names rendered in the scrolling marquee stay in
+   * their canonical English form regardless of locale (same no-translate
+   * rule the nav uses for product names). Only the surrounding marketing
+   * copy localizes: kicker, title, lead, and the four feature chips.
+   */
+  amrBand: {
+    kicker: string;
+    title: string;
+    lead: string;
+    chips: readonly string[];
+    cta: string;
+    /** aria-label for the vendor-logo row (screen-reader only). */
+    logosAriaLabel: string;
+    /** aria-label for the trailing "…" item that signals "and more". */
+    moreAriaLabel: string;
+  };
   cta: {
     rule: string;
     command: string;
@@ -656,6 +784,16 @@ export interface HomePageCopy {
     issue: string;
     live: string;
     ribbon: string;
+  };
+  newsletter: {
+    label: string;
+    title: string;
+    lead: string;
+    placeholder: string;
+    button: string;
+    success: string;
+    error: string;
+    dismiss: string;
   };
   footer: {
     summary: string;
@@ -715,6 +853,7 @@ export interface LandingUiCopy {
     rss: string;
     sisterProjects: string;
     htmlAnything: string;
+    htmlVideo: string;
     nexuIo: string;
     bottomLeft: string;
     bottomRight: string;
@@ -975,6 +1114,14 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Community',
         contact: 'Contact',
+        contributors: 'Contributors',
+        ambassadors: 'Ambassadors',
+        moderators: 'Moderators',
+        solution: 'Solution',
+        agent: 'Agent',
+        resources: 'Resources',
+        useCases: 'Use cases',
+        roles: 'Roles',
       },
       download: 'Download',
       downloadAria: 'Download Open Design desktop',
@@ -1008,6 +1155,14 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: '博客',
         community: '社区',
         contact: '联系',
+        contributors: '贡献者',
+        ambassadors: '大使',
+        moderators: '版主',
+        solution: '解决方案',
+        agent: 'Agent',
+        resources: '资源',
+        useCases: '使用场景',
+        roles: '角色',
       },
       download: '下载',
       downloadAria: '下载 Open Design 桌面端',
@@ -1041,13 +1196,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: '部落格',
         community: '社群',
         contact: '聯絡',
+        contributors: '貢獻者',
+        ambassadors: '大使',
+        moderators: '版主',
+        solution: '解決方案',
+        agent: 'Agent',
+        resources: '資源',
+        useCases: '使用場景',
+        roles: '角色',
       },
       download: '下載',
       downloadAria: '下載 Open Design 桌面端',
       downloadTitle: '下載桌面應用',
       starAria: '在 GitHub 為 Open Design 按 Star',
       starTitle: '去 GitHub 按 Star',
-      starPrefix: 'Star',
+      starPrefix: '點星',
     },
   },
   ja: {
@@ -1074,13 +1237,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'ブログ',
         community: 'コミュニティ',
         contact: '連絡',
+        contributors: '貢献者',
+        ambassadors: 'アンバサダー',
+        moderators: 'モデレーター',
+        solution: 'ソリューション',
+        agent: 'エージェント',
+        resources: 'リソース',
+        useCases: 'ユースケース',
+        roles: 'ロール',
       },
       download: 'ダウンロード',
       downloadAria: 'Open Design デスクトップをダウンロード',
       downloadTitle: 'デスクトップアプリをダウンロード',
       starAria: 'GitHub で Open Design にスター',
       starTitle: 'GitHub でスターする',
-      starPrefix: 'Star',
+      starPrefix: 'スター',
     },
   },
   ko: {
@@ -1107,13 +1278,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: '블로그',
         community: '커뮤니티',
         contact: '문의',
+        contributors: '기여자',
+        ambassadors: '앰배서더',
+        moderators: '모더레이터',
+        solution: '솔루션',
+        agent: '에이전트',
+        resources: '리소스',
+        useCases: '활용 사례',
+        roles: '역할',
       },
       download: '다운로드',
       downloadAria: 'Open Design 데스크톱 다운로드',
       downloadTitle: '데스크톱 앱 다운로드',
       starAria: 'GitHub에서 Open Design에 스타 주기',
       starTitle: 'GitHub에서 스타 주기',
-      starPrefix: 'Star',
+      starPrefix: '스타',
     },
   },
   de: {
@@ -1140,13 +1319,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Community',
         contact: 'Kontakt',
+        contributors: 'Mitwirkende',
+        ambassadors: 'Botschafter',
+        moderators: 'Moderatoren',
+        solution: 'Lösungen',
+        agent: 'Agent',
+        resources: 'Ressourcen',
+        useCases: 'Anwendungsfälle',
+        roles: 'Rollen',
       },
       download: 'Download',
       downloadAria: 'Open Design Desktop herunterladen',
       downloadTitle: 'Desktop-App herunterladen',
       starAria: 'Open Design auf GitHub mit Stern markieren',
       starTitle: 'Auf GitHub sternen',
-      starPrefix: 'Star',
+      starPrefix: 'Stern',
     },
   },
   fr: {
@@ -1173,13 +1360,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Communauté',
         contact: 'Contact',
+        contributors: 'Contributeurs',
+        ambassadors: 'Ambassadeurs',
+        moderators: 'Modérateurs',
+        solution: 'Solutions',
+        agent: 'Agent',
+        resources: 'Ressources',
+        useCases: 'Cas d’usage',
+        roles: 'Rôles',
       },
       download: 'Télécharger',
       downloadAria: 'Télécharger Open Design Desktop',
       downloadTitle: "Télécharger l'application desktop",
       starAria: 'Ajouter une étoile à Open Design sur GitHub',
       starTitle: 'Mettre une étoile sur GitHub',
-      starPrefix: 'Star',
+      starPrefix: 'Étoile',
     },
   },
   ru: {
@@ -1206,13 +1401,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Блог',
         community: 'Сообщество',
         contact: 'Контакт',
+        contributors: 'Участники',
+        ambassadors: 'Амбассадоры',
+        moderators: 'Модераторы',
+        solution: 'Решения',
+        agent: 'Агенты',
+        resources: 'Ресурсы',
+        useCases: 'Сценарии',
+        roles: 'Роли',
       },
       download: 'Скачать',
       downloadAria: 'Скачать Open Design Desktop',
       downloadTitle: 'Скачать desktop-приложение',
       starAria: 'Поставить звезду Open Design на GitHub',
       starTitle: 'Поставить звезду на GitHub',
-      starPrefix: 'Star',
+      starPrefix: 'Звезда',
     },
   },
   es: {
@@ -1239,13 +1442,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Comunidad',
         contact: 'Contacto',
+        contributors: 'Colaboradores',
+        ambassadors: 'Embajadores',
+        moderators: 'Moderadores',
+        solution: 'Soluciones',
+        agent: 'Agente',
+        resources: 'Recursos',
+        useCases: 'Casos de uso',
+        roles: 'Roles',
       },
       download: 'Descargar',
       downloadAria: 'Descargar Open Design Desktop',
       downloadTitle: 'Descargar la app de escritorio',
       starAria: 'Dar Star a Open Design en GitHub',
       starTitle: 'Dar Star en GitHub',
-      starPrefix: 'Star',
+      starPrefix: 'Estrella',
     },
   },
   'pt-br': {
@@ -1272,13 +1483,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Comunidade',
         contact: 'Contato',
+        contributors: 'Colaboradores',
+        ambassadors: 'Embaixadores',
+        moderators: 'Moderadores',
+        solution: 'Soluções',
+        agent: 'Agente',
+        resources: 'Recursos',
+        useCases: 'Casos de uso',
+        roles: 'Funções',
       },
       download: 'Baixar',
       downloadAria: 'Baixar Open Design Desktop',
       downloadTitle: 'Baixar o app desktop',
       starAria: 'Dar Star no Open Design no GitHub',
       starTitle: 'Dar Star no GitHub',
-      starPrefix: 'Star',
+      starPrefix: 'Estrela',
     },
   },
   it: {
@@ -1305,13 +1524,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Comunità',
         contact: 'Contatto',
+        contributors: 'Contributori',
+        ambassadors: 'Ambasciatori',
+        moderators: 'Moderatori',
+        solution: 'Soluzioni',
+        agent: 'Agente',
+        resources: 'Risorse',
+        useCases: 'Casi d’uso',
+        roles: 'Ruoli',
       },
       download: 'Scarica',
       downloadAria: 'Scarica Open Design Desktop',
       downloadTitle: "Scarica l'app desktop",
       starAria: 'Metti una Star a Open Design su GitHub',
       starTitle: 'Metti una Star su GitHub',
-      starPrefix: 'Star',
+      starPrefix: 'Stella',
     },
   },
   vi: {
@@ -1338,13 +1565,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Cộng đồng',
         contact: 'Liên hệ',
+        contributors: 'Người đóng góp',
+        ambassadors: 'Đại sứ',
+        moderators: 'Người kiểm duyệt',
+        solution: 'Giải pháp',
+        agent: 'Agent',
+        resources: 'Tài nguyên',
+        useCases: 'Trường hợp dùng',
+        roles: 'Vai trò',
       },
       download: 'Tải xuống',
       downloadAria: 'Tải Open Design Desktop',
       downloadTitle: 'Tải ứng dụng desktop',
       starAria: 'Star Open Design trên GitHub',
       starTitle: 'Star trên GitHub',
-      starPrefix: 'Star',
+      starPrefix: 'Sao',
     },
   },
   pl: {
@@ -1371,13 +1606,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Społeczność',
         contact: 'Kontakt',
+        contributors: 'Współtwórcy',
+        ambassadors: 'Ambasadorzy',
+        moderators: 'Moderatorzy',
+        solution: 'Rozwiązania',
+        agent: 'Agent',
+        resources: 'Zasoby',
+        useCases: 'Zastosowania',
+        roles: 'Role',
       },
       download: 'Pobierz',
       downloadAria: 'Pobierz Open Design Desktop',
       downloadTitle: 'Pobierz aplikację desktop',
       starAria: 'Daj gwiazdkę Open Design na GitHubie',
       starTitle: 'Daj gwiazdkę na GitHubie',
-      starPrefix: 'Star',
+      starPrefix: 'Gwiazdka',
     },
   },
   id: {
@@ -1404,13 +1647,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Komunitas',
         contact: 'Kontak',
+        contributors: 'Kontributor',
+        ambassadors: 'Duta',
+        moderators: 'Moderator',
+        solution: 'Solusi',
+        agent: 'Agent',
+        resources: 'Sumber Daya',
+        useCases: 'Kasus Penggunaan',
+        roles: 'Peran',
       },
       download: 'Unduh',
       downloadAria: 'Unduh Open Design Desktop',
       downloadTitle: 'Unduh aplikasi desktop',
       starAria: 'Beri Star Open Design di GitHub',
       starTitle: 'Beri Star di GitHub',
-      starPrefix: 'Star',
+      starPrefix: 'Bintang',
     },
   },
   nl: {
@@ -1437,13 +1688,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Community',
         contact: 'Contact',
+        contributors: 'Bijdragers',
+        ambassadors: 'Ambassadeurs',
+        moderators: 'Moderators',
+        solution: 'Oplossingen',
+        agent: 'Agent',
+        resources: 'Bronnen',
+        useCases: 'Use cases',
+        roles: 'Rollen',
       },
       download: 'Download',
       downloadAria: 'Open Design Desktop downloaden',
       downloadTitle: 'Desktop-app downloaden',
       starAria: 'Geef Open Design een Star op GitHub',
       starTitle: 'Star op GitHub',
-      starPrefix: 'Star',
+      starPrefix: 'Ster',
     },
   },
   ar: {
@@ -1470,13 +1729,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'المدونة',
         community: 'المجتمع',
         contact: 'تواصل',
+        contributors: 'المساهمون',
+        ambassadors: 'السفراء',
+        moderators: 'المشرفون',
+        solution: 'الحلول',
+        agent: 'الوكلاء',
+        resources: 'الموارد',
+        useCases: 'حالات الاستخدام',
+        roles: 'الأدوار',
       },
       download: 'تنزيل',
       downloadAria: 'تنزيل Open Design Desktop',
       downloadTitle: 'تنزيل تطبيق سطح المكتب',
       starAria: 'ضع نجمة لـ Open Design على GitHub',
       starTitle: 'ضع نجمة على GitHub',
-      starPrefix: 'Star',
+      starPrefix: 'نجمة',
     },
   },
   tr: {
@@ -1503,13 +1770,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Blog',
         community: 'Topluluk',
         contact: 'İletişim',
+        contributors: 'Katkıda bulunanlar',
+        ambassadors: 'Elçiler',
+        moderators: 'Moderatörler',
+        solution: 'Çözümler',
+        agent: 'Agent',
+        resources: 'Kaynaklar',
+        useCases: 'Kullanım alanları',
+        roles: 'Roller',
       },
       download: 'İndir',
       downloadAria: 'Open Design Desktop indir',
       downloadTitle: 'Desktop uygulamasını indir',
       starAria: "GitHub'da Open Design'a Star ver",
       starTitle: "GitHub'da Star ver",
-      starPrefix: 'Star',
+      starPrefix: 'Yıldız',
     },
   },
   uk: {
@@ -1536,13 +1811,21 @@ const COMMON_COPY: Record<LandingLocaleCode, CommonCopy> = {
         blog: 'Блог',
         community: 'Спільнота',
         contact: 'Контакт',
+        contributors: 'Учасники',
+        ambassadors: 'Амбасадори',
+        moderators: 'Модератори',
+        solution: 'Рішення',
+        agent: 'Агенти',
+        resources: 'Ресурси',
+        useCases: 'Сценарії',
+        roles: 'Ролі',
       },
       download: 'Завантажити',
       downloadAria: 'Завантажити Open Design Desktop',
       downloadTitle: 'Завантажити desktop-застосунок',
       starAria: 'Поставити зірку Open Design на GitHub',
       starTitle: 'Поставити зірку на GitHub',
-      starPrefix: 'Star',
+      starPrefix: 'Зірка',
     },
   },
 };
@@ -2388,6 +2671,20 @@ const HOME_PAGE_COPY_EN: HomePageCopy = {
     titleMiddle: 'and the',
     titleSuffix: 'open-source Claude Design alternative',
   },
+  amrBand: {
+    kicker: 'Open Design AMR · Design Agent',
+    title: 'The world’s top Agents and LLMs, powering Open Design',
+    lead: 'Top up once and reach GPT, Claude, Gemini, DeepSeek and more. AMR auto-routes each step to the right frontier model — billed by real token usage, with your wallet balance and request log in one console.',
+    chips: [
+      '20+ flagship models',
+      'Zero setup',
+      'SOTA Harness For Design',
+      'Real token-based billing',
+    ],
+    cta: 'Explore AMR',
+    logosAriaLabel: 'Built-in frontier models',
+    moreAriaLabel: 'and more',
+  },
   cta: {
     rule: 'Contact / Conversation',
     command: 'Three commands to ship',
@@ -2403,6 +2700,16 @@ const HOME_PAGE_COPY_EN: HomePageCopy = {
     issue: 'Open an issue',
     live: 'Live',
     ribbon: 'OPEN DESIGN · FIN.',
+  },
+  newsletter: {
+    label: 'Stay updated',
+    title: 'The Open Design newsletter',
+    lead: 'New templates, design-system drops, ambassador work, and product updates — straight to your inbox.',
+    placeholder: 'you@studio.com',
+    button: 'Subscribe',
+    success: 'You’re in. Watch your inbox.',
+    error: 'Something went wrong. Try again.',
+    dismiss: 'Close',
   },
   footer: {
     summary:
@@ -2449,12 +2756,13 @@ const HOME_PAGE_COPY: Partial<Record<LandingLocaleCode, HomePageCopy>> = {
       joinDiscord: '加入 Discord',
       label: '开源设计工作室',
       issue: 'Nº 01',
-      titlePrefix: '开源的',
-      titleEmphasis: 'Claude Design',
-      titleMiddle: '运行在',
-      titleSecondEmphasis: '你自己的 Agent 上',
-      lead: (skills, systems) =>
-        `Open Design 是官方、本地优先的 Claude Design 替代方案。你现有的编码 Agent —— Claude Code · Codex · Cursor · Gemini · OpenCode · Qwen —— 会变成设计引擎，并由 ${skills} 个可组合 Skill 与 ${systems} 套可移植 DESIGN.md 系统驱动。`,
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: '开源、本地、Agent 驱动的设计平台',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Figma 和 Claude Design 的 Agent-native 替代。\n桌面客户端优先，接入 16 个 Coding Agent，${systems} 个 Design System，Apache-2.0。`,
       star: '在 GitHub 点 Star',
       download: '下载桌面端',
       plate: '图版 Nº 08',
@@ -2663,6 +2971,20 @@ const HOME_PAGE_COPY: Partial<Record<LandingLocaleCode, HomePageCopy>> = {
       titleMiddle: '以及',
       titleSuffix: 'Claude Design 开源替代方案的问题',
     },
+    amrBand: {
+      kicker: 'Open Design AMR · 设计 Agent',
+      title: '为 Open Design 提供全球顶尖的 Agent 和 LLMs',
+      lead: '一次充值即可使用 GPT、Claude、Gemini、DeepSeek。AMR 自动为每一步路由到最合适的前沿模型，按真实 Token 用量计费，在同一个控制台查看钱包余额和请求记录。',
+      chips: [
+        '20+ 旗舰模型',
+        '零配置即用',
+        'SOTA Harness For Design',
+        '真实 Token 计费',
+      ],
+      cta: '了解 AMR',
+      logosAriaLabel: '内置的前沿模型',
+      moreAriaLabel: '以及更多',
+    },
     cta: {
       rule: '联系 / 对话',
       command: '三条命令开始交付',
@@ -2678,6 +3000,16 @@ const HOME_PAGE_COPY: Partial<Record<LandingLocaleCode, HomePageCopy>> = {
       issue: '提交 issue',
       live: '在线',
       ribbon: 'OPEN DESIGN · 完。',
+    },
+    newsletter: {
+      label: '保持关注',
+      title: 'Open Design 订阅',
+      lead: '新模版、设计系统更新、大使活动与产品动态，直接发到你的邮箱。',
+      placeholder: 'you@studio.com',
+      button: '订阅',
+      success: '订阅成功，注意查收邮件。',
+      error: '出了点问题，请重试。',
+      dismiss: '关闭',
     },
     footer: {
       summary:
@@ -2715,6 +3047,15 @@ const HOME_PAGE_COPY: Partial<Record<LandingLocaleCode, HomePageCopy>> = {
 
 HOME_PAGE_COPY['zh-tw'] = {
   ...HOME_PAGE_COPY.zh!,
+  amrBand: {
+    kicker: 'Open Design AMR · 設計 Agent',
+    title: '為 Open Design 提供全球頂尖的 Agent 和 LLMs',
+    lead: '一次儲值即可使用 GPT、Claude、Gemini、DeepSeek。AMR 自動為每一步路由到最合適的前沿模型，依真實 Token 用量計費，在同一個控制台查看錢包餘額和請求記錄。',
+    chips: ['20+ 旗艦模型', '零配置即用', 'SOTA Harness For Design', '真實 Token 計費'],
+    cta: '了解 AMR',
+    logosAriaLabel: '內建的前沿模型',
+    moreAriaLabel: '以及更多',
+  },
   rail: {
     right: 'Open Design — 第 01 卷 · 第 26 期 · Apache-2.0',
     left: 'Skills · 設計系統 · Agents · BYOK · 本地優先',
@@ -2953,6 +3294,16 @@ HOME_PAGE_COPY['zh-tw'] = {
     live: '在線',
     ribbon: 'OPEN DESIGN · 完。',
   },
+  newsletter: {
+    label: '保持關注',
+    title: 'Open Design 訂閱',
+    lead: '新模版、設計系統更新、大使活動與產品動態，直接發到你的信箱。',
+    placeholder: 'you@studio.com',
+    button: '訂閱',
+    success: '訂閱成功，請注意查收郵件。',
+    error: '出了點問題，請重試。',
+    dismiss: '關閉',
+  },
   footer: {
     ...HOME_PAGE_COPY.zh!.footer,
     summary:
@@ -3016,6 +3367,7 @@ const LANDING_UI_COPY: LandingUiCopy = {
     rss: 'RSS',
     sisterProjects: 'Sister projects',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
     bottomLeft: '● Open Design · Apache-2.0 · 2026 / Volume 01 / Issue Nº 26',
     bottomRight: 'Berlin / Open / Earth · 52.5200° N · 13.4050° E',
@@ -3301,6 +3653,7 @@ const LANDING_UI_COPY_OVERRIDES: Partial<
       rss: 'RSS',
       sisterProjects: '姊妹项目',
       htmlAnything: 'HTML Anything',
+      htmlVideo: 'HTML Video',
       nexuIo: 'nexu.io',
       bottomLeft: '● Open Design · Apache-2.0 · 2026 / 第 01 卷 / 第 26 期',
       bottomRight: '柏林 / 开放 / 地球 · 52.5200° N · 13.4050° E',
@@ -3582,6 +3935,7 @@ const LANDING_UI_COPY_OVERRIDES: Partial<
       rss: 'RSS',
       sisterProjects: '姊妹專案',
       htmlAnything: 'HTML Anything',
+      htmlVideo: 'HTML Video',
       nexuIo: 'nexu.io',
       bottomLeft: '● Open Design · Apache-2.0 · 2026 / 第 01 卷 / 第 26 期',
       bottomRight: '柏林 / 開放 / 地球 · 52.5200° N · 13.4050° E',
@@ -3666,8 +4020,310 @@ function mergeCopy<T>(base: T, override: DeepPartial<T> | undefined): T {
   return out as T;
 }
 
+const FIRST_SCREEN_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<HomePageCopy>>> = {
+  en: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'Open-source, local, agent-driven design platform',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `An agent-native alternative to Figma and Claude Design.\nDesktop-first, connected to 16 coding agents, ${systems} design systems, Apache-2.0.`,
+      stats: [
+        { strong: 'Skills', text: 'shippable' },
+        { strong: 'Systems', text: 'portable' },
+        { strong: 'CLI', text: 'bring your agent' },
+      ],
+    },
+  },
+  zh: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: '开源、本地、Agent 驱动的设计平台',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Figma 和 Claude Design 的 Agent 原生替代。\n桌面客户端优先，接入 16 个编码 Agent，${systems} 个设计系统，Apache-2.0。`,
+      star: '在 GitHub 点 Star',
+      stats: [
+        { strong: '技能', text: '可交付' },
+        { strong: '系统', text: '可移植' },
+        { strong: '命令行', text: '自带代理' },
+      ],
+    },
+  },
+  'zh-tw': {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: '開源、本地、Agent 驅動的設計平台',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Figma 和 Claude Design 的 Agent 原生替代。\n桌面客戶端優先，接入 16 個編碼 Agent，${systems} 個設計系統，Apache-2.0。`,
+      star: '在 GitHub 點星',
+      stats: [
+        { strong: '技能', text: '可交付' },
+        { strong: '系統', text: '可移植' },
+        { strong: '命令列', text: '自帶代理' },
+      ],
+    },
+  },
+  ja: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'オープンソース、ローカル、Agent 駆動のデザインプラットフォーム',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Figma と Claude Design に代わる Agent ネイティブな選択肢。\nデスクトップ優先で、16 個のコーディング Agent、${systems} 個のデザインシステム、Apache-2.0 に対応。`,
+      stats: [
+        { strong: 'Skill', text: '納品可能' },
+        { strong: 'System', text: '移植可能' },
+        { strong: 'CLI', text: 'Agent 持ち込み' },
+      ],
+    },
+  },
+  ko: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: '오픈소스, 로컬, Agent 구동 디자인 플랫폼',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Figma와 Claude Design을 대체하는 Agent 네이티브 선택지.\n데스크톱 우선, 16개 코딩 Agent와 ${systems}개 디자인 시스템, Apache-2.0 지원.`,
+      stats: [
+        { strong: '스킬', text: '출하 가능' },
+        { strong: '시스템', text: '이식 가능' },
+        { strong: 'CLI', text: 'Agent 직접 사용' },
+      ],
+    },
+  },
+  de: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'Open-Source, lokal, Agent-getriebene Designplattform',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Die Agent-native Alternative zu Figma und Claude Design.\nDesktop-first, mit 16 Coding-Agents, ${systems} Designsystemen und Apache-2.0.`,
+      stats: [
+        { strong: 'Skills', text: 'lieferbar' },
+        { strong: 'Systeme', text: 'portabel' },
+        { strong: 'CLI', text: 'eigener Agent' },
+      ],
+    },
+  },
+  fr: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'plateforme de design open source, locale et pilotée par Agent',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `L’alternative Agent-native à Figma et Claude Design.\nPriorité au desktop, connectée à 16 agents de code, ${systems} systèmes de design, Apache-2.0.`,
+      stats: [
+        { strong: 'Skills', text: 'livrables' },
+        { strong: 'Systèmes', text: 'portables' },
+        { strong: 'CLI', text: 'votre Agent' },
+      ],
+    },
+  },
+  ru: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'открытая, локальная дизайн-платформа на базе Agent',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Agent-native альтернатива Figma и Claude Design.\nСтавка на десктоп: 16 coding agents, ${systems} дизайн-систем, Apache-2.0.`,
+      stats: [
+        { strong: 'Skills', text: 'к поставке' },
+        { strong: 'Системы', text: 'портативны' },
+        { strong: 'CLI', text: 'ваш Agent' },
+      ],
+    },
+  },
+  es: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'plataforma de diseño abierta, local e impulsada por Agent',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `La alternativa Agent-native a Figma y Claude Design.\nPrimero desktop, conectada a 16 agentes de código, ${systems} sistemas de diseño, Apache-2.0.`,
+      stats: [
+        { strong: 'Skills', text: 'entregables' },
+        { strong: 'Sistemas', text: 'portátiles' },
+        { strong: 'CLI', text: 'tu Agent' },
+      ],
+    },
+  },
+  'pt-br': {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'plataforma de design aberta, local e movida por Agent',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `A alternativa Agent-native ao Figma e ao Claude Design.\nDesktop em primeiro lugar, conectada a 16 agentes de código, ${systems} sistemas de design, Apache-2.0.`,
+      stats: [
+        { strong: 'Skills', text: 'entregáveis' },
+        { strong: 'Sistemas', text: 'portáteis' },
+        { strong: 'CLI', text: 'seu Agent' },
+      ],
+    },
+  },
+  it: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'piattaforma di design open source, locale e guidata da Agent',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `L’alternativa Agent-native a Figma e Claude Design.\nPrima desktop, connessa a 16 agenti di codice, ${systems} sistemi di design, Apache-2.0.`,
+      stats: [
+        { strong: 'Skill', text: 'consegnabili' },
+        { strong: 'Sistemi', text: 'portabili' },
+        { strong: 'CLI', text: 'il tuo Agent' },
+      ],
+    },
+  },
+  vi: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'nền tảng thiết kế mã nguồn mở, cục bộ, do Agent điều khiển',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Lựa chọn thay thế Agent-native cho Figma và Claude Design.\nƯu tiên desktop, kết nối 16 coding agent, ${systems} hệ thống thiết kế, Apache-2.0.`,
+      stats: [
+        { strong: 'Skill', text: 'có thể giao' },
+        { strong: 'Hệ thống', text: 'di động' },
+        { strong: 'CLI', text: 'Agent của bạn' },
+      ],
+    },
+  },
+  pl: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'otwarta, lokalna platforma designu napędzana przez Agent',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Agent-native alternatywa dla Figmy i Claude Design.\nDesktop-first, połączona z 16 agentami kodu, ${systems} systemami designu, Apache-2.0.`,
+      stats: [
+        { strong: 'Skills', text: 'do wysyłki' },
+        { strong: 'Systemy', text: 'przenośne' },
+        { strong: 'CLI', text: 'twój Agent' },
+      ],
+    },
+  },
+  id: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'platform desain open source, lokal, digerakkan Agent',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Alternatif Agent-native untuk Figma dan Claude Design.\nMengutamakan desktop, terhubung ke 16 agent coding, ${systems} sistem desain, Apache-2.0.`,
+      stats: [
+        { strong: 'Skill', text: 'siap kirim' },
+        { strong: 'Sistem', text: 'portabel' },
+        { strong: 'CLI', text: 'Agent Anda' },
+      ],
+    },
+  },
+  nl: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'open-source, lokaal, Agent-gedreven designplatform',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Het Agent-native alternatief voor Figma en Claude Design.\nDesktop-first, verbonden met 16 coding agents, ${systems} designsystemen, Apache-2.0.`,
+      stats: [
+        { strong: 'Skills', text: 'leverbaar' },
+        { strong: 'Systemen', text: 'draagbaar' },
+        { strong: 'CLI', text: 'je Agent' },
+      ],
+    },
+  },
+  ar: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'منصة تصميم مفتوحة ومحلية تعمل عبر Agent',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `بديل Agent-native لـ Figma وClaude Design.\nيركز على سطح المكتب، ويتصل بـ 16 Agent برمجة و${systems} نظام تصميم، Apache-2.0.`,
+      stats: [
+        { strong: 'مهارات', text: 'جاهزة للتسليم' },
+        { strong: 'أنظمة', text: 'قابلة للنقل' },
+        { strong: 'CLI', text: 'Agent الخاص بك' },
+      ],
+    },
+  },
+  tr: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'açık kaynak, yerel, Agent destekli tasarım platformu',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Figma ve Claude Design için Agent-native alternatif.\nÖncelik desktop; 16 coding agent, ${systems} tasarım sistemi, Apache-2.0.`,
+      stats: [
+        { strong: 'Skill', text: 'teslim edilebilir' },
+        { strong: 'Sistem', text: 'taşınabilir' },
+        { strong: 'CLI', text: 'kendi Agentın' },
+      ],
+    },
+  },
+  uk: {
+    hero: {
+      titlePrefix: '',
+      titleEmphasis: 'Open Design',
+      titleMiddle: 'відкрита, локальна дизайн-платформа на базі Agent',
+      titleSecondEmphasis: '',
+      titleBreakAfterEmphasis: true,
+      lead: (_skills, systems) =>
+        `Agent-native альтернатива Figma та Claude Design.\nDesktop-first, підключено 16 coding agents, ${systems} дизайн-систем, Apache-2.0.`,
+      stats: [
+        { strong: 'Skills', text: 'до доставки' },
+        { strong: 'Системи', text: 'портативні' },
+        { strong: 'CLI', text: 'ваш Agent' },
+      ],
+    },
+  },
+};
+
 const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<HomePageCopy>>> = {
   ja: {
+    amrBand: {
+      kicker: 'Open Design AMR · デザイン Agent',
+      title: 'Open Design を支える、世界トップクラスの Agent と LLM',
+      lead: '一度チャージするだけで GPT、Claude、Gemini、DeepSeek を利用可能。AMR が各ステップを最適なフロンティアモデルへ自動ルーティングし、実際のトークン使用量で課金。ウォレット残高とリクエスト履歴は同じコンソールで確認できます。',
+      chips: ['20+ のフラッグシップモデル', 'ゼロ設定', 'SOTA Harness For Design', '実トークン課金'],
+      cta: 'AMR を見る',
+      logosAriaLabel: '内蔵のフロンティアモデル',
+      moreAriaLabel: 'ほか',
+    },
     hero: {
       label: 'オープンソース・デザインスタジオ',
       titlePrefix: 'オープンソースの',
@@ -3688,6 +4344,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'Claude Design のオープンソース代替。local-first、BYOK、Apache-2.0。', download: 'デスクトップをダウンロード' },
   },
   ko: {
+    amrBand: {
+      kicker: 'Open Design AMR · 디자인 Agent',
+      title: 'Open Design을 구동하는 세계 최고의 Agent와 LLM',
+      lead: '한 번 충전하면 GPT, Claude, Gemini, DeepSeek를 사용할 수 있습니다. AMR이 각 단계를 최적의 프런티어 모델로 자동 라우팅하고 실제 토큰 사용량으로 과금하며, 지갑 잔액과 요청 기록을 하나의 콘솔에서 확인할 수 있습니다.',
+      chips: ['20+ 플래그십 모델', '제로 설정', 'SOTA Harness For Design', '실제 토큰 과금'],
+      cta: 'AMR 살펴보기',
+      logosAriaLabel: '내장된 프런티어 모델',
+      moreAriaLabel: '그 외 더 보기',
+    },
     hero: {
       label: '오픈소스 디자인 스튜디오',
       titlePrefix: '오픈소스',
@@ -3708,6 +4373,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'Claude Design의 오픈소스 대안. Local-first, BYOK, Apache-2.0.', download: '데스크톱 다운로드' },
   },
   de: {
+    amrBand: {
+      kicker: 'Open Design AMR · Design-Agent',
+      title: 'Die besten Agents und LLMs der Welt – für Open Design',
+      lead: 'Einmal aufladen und GPT, Claude, Gemini und DeepSeek nutzen. AMR routet jeden Schritt automatisch zum passenden Frontier-Modell, rechnet nach realem Token-Verbrauch ab und zeigt Guthaben und Anfrageverlauf in einer Konsole.',
+      chips: ['20+ Flaggschiff-Modelle', 'Keine Einrichtung', 'SOTA Harness For Design', 'Abrechnung nach echten Tokens'],
+      cta: 'AMR entdecken',
+      logosAriaLabel: 'Integrierte Frontier-Modelle',
+      moreAriaLabel: 'und mehr',
+    },
     hero: {
       label: 'Open-Source-Designstudio',
       titlePrefix: 'Open-source',
@@ -3728,6 +4402,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'Die Open-Source-Alternative zu Claude Design. Local-first, BYOK, Apache-2.0.', download: 'Desktop herunterladen' },
   },
   fr: {
+    amrBand: {
+      kicker: 'Open Design AMR · Agent de design',
+      title: 'Les meilleurs Agents et LLM du monde, au service d’Open Design',
+      lead: 'Rechargez une fois et accédez à GPT, Claude, Gemini et DeepSeek. AMR route automatiquement chaque étape vers le bon modèle de pointe, facture à l’usage réel de tokens et réunit solde et historique des requêtes dans une seule console.',
+      chips: ['20+ modèles phares', 'Zéro configuration', 'SOTA Harness For Design', 'Facturation au token réel'],
+      cta: 'Découvrir AMR',
+      logosAriaLabel: 'Modèles de pointe intégrés',
+      moreAriaLabel: 'et plus encore',
+    },
     hero: {
       label: 'Studio de design open source',
       titlePrefix: 'Claude Design',
@@ -3748,6 +4431,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: "L'alternative open source à Claude Design. Local-first, BYOK, Apache-2.0.", download: 'Télécharger le desktop' },
   },
   ru: {
+    amrBand: {
+      kicker: 'Open Design AMR · Дизайн-агент',
+      title: 'Лучшие в мире агенты и LLM на службе Open Design',
+      lead: 'Пополните счёт один раз и используйте GPT, Claude, Gemini и DeepSeek. AMR автоматически направляет каждый шаг к подходящей передовой модели, тарифицирует по реальному расходу токенов и показывает баланс и историю запросов в одной консоли.',
+      chips: ['20+ флагманских моделей', 'Нулевая настройка', 'SOTA Harness For Design', 'Оплата по реальным токенам'],
+      cta: 'Узнать об AMR',
+      logosAriaLabel: 'Встроенные передовые модели',
+      moreAriaLabel: 'и другие',
+    },
     hero: {
       label: 'Open-source дизайн-студия',
       titlePrefix: 'Open-source',
@@ -3768,6 +4460,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'Open-source альтернатива Claude Design. Local-first, BYOK, Apache-2.0.', download: 'Скачать desktop' },
   },
   es: {
+    amrBand: {
+      kicker: 'Open Design AMR · Agente de diseño',
+      title: 'Los mejores Agents y LLM del mundo, impulsando Open Design',
+      lead: 'Recarga una vez y usa GPT, Claude, Gemini y DeepSeek. AMR enruta automáticamente cada paso al modelo de frontera adecuado, factura por el uso real de tokens y reúne saldo e historial de solicitudes en una sola consola.',
+      chips: ['20+ modelos insignia', 'Cero configuración', 'SOTA Harness For Design', 'Facturación por tokens reales'],
+      cta: 'Explorar AMR',
+      logosAriaLabel: 'Modelos de frontera integrados',
+      moreAriaLabel: 'y más',
+    },
     hero: {
       label: 'Estudio de diseño open source',
       titlePrefix: 'Claude Design',
@@ -3788,6 +4489,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'La alternativa open source a Claude Design. Local-first, BYOK, Apache-2.0.', download: 'Descargar desktop' },
   },
   'pt-br': {
+    amrBand: {
+      kicker: 'Open Design AMR · Agente de design',
+      title: 'Os melhores Agents e LLMs do mundo, impulsionando o Open Design',
+      lead: 'Recarregue uma vez e use GPT, Claude, Gemini e DeepSeek. O AMR roteia automaticamente cada etapa para o modelo de fronteira certo, cobra pelo uso real de tokens e reúne saldo e histórico de solicitações em um único console.',
+      chips: ['20+ modelos de ponta', 'Configuração zero', 'SOTA Harness For Design', 'Cobrança por tokens reais'],
+      cta: 'Conhecer o AMR',
+      logosAriaLabel: 'Modelos de fronteira integrados',
+      moreAriaLabel: 'e mais',
+    },
     hero: {
       label: 'Estúdio de design open source',
       titlePrefix: 'Claude Design',
@@ -3808,6 +4518,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'A alternativa open source ao Claude Design. Local-first, BYOK, Apache-2.0.', download: 'Baixar desktop' },
   },
   it: {
+    amrBand: {
+      kicker: 'Open Design AMR · Agente di design',
+      title: 'I migliori Agent e LLM al mondo, al servizio di Open Design',
+      lead: 'Ricarica una volta e usa GPT, Claude, Gemini e DeepSeek. AMR instrada automaticamente ogni passaggio verso il modello di frontiera giusto, fattura in base al consumo reale di token e raccoglie saldo e cronologia delle richieste in un’unica console.',
+      chips: ['20+ modelli di punta', 'Zero configurazione', 'SOTA Harness For Design', 'Fatturazione a token reali'],
+      cta: 'Scopri AMR',
+      logosAriaLabel: 'Modelli di frontiera integrati',
+      moreAriaLabel: 'e altri',
+    },
     hero: {
       label: 'Studio di design open source',
       titlePrefix: 'Claude Design',
@@ -3828,6 +4547,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: "L'alternativa open source a Claude Design. Local-first, BYOK, Apache-2.0.", download: 'Scarica desktop' },
   },
   vi: {
+    amrBand: {
+      kicker: 'Open Design AMR · Agent thiết kế',
+      title: 'Những Agent và LLM hàng đầu thế giới, tiếp sức cho Open Design',
+      lead: 'Nạp một lần và dùng GPT, Claude, Gemini và DeepSeek. AMR tự động định tuyến mỗi bước tới mô hình tiên tiến phù hợp, tính phí theo lượng token thực tế và hiển thị số dư cùng lịch sử yêu cầu trong cùng một bảng điều khiển.',
+      chips: ['20+ mô hình hàng đầu', 'Không cần cấu hình', 'SOTA Harness For Design', 'Tính phí theo token thực'],
+      cta: 'Khám phá AMR',
+      logosAriaLabel: 'Mô hình tiên tiến tích hợp sẵn',
+      moreAriaLabel: 'và nhiều hơn nữa',
+    },
     hero: {
       label: 'Studio thiết kế mã nguồn mở',
       titlePrefix: 'Claude Design',
@@ -3848,6 +4576,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'Lựa chọn mã nguồn mở thay Claude Design. Local-first, BYOK, Apache-2.0.', download: 'Tải desktop' },
   },
   pl: {
+    amrBand: {
+      kicker: 'Open Design AMR · Agent projektowy',
+      title: 'Najlepsze na świecie Agenty i LLM napędzają Open Design',
+      lead: 'Doładuj raz i korzystaj z GPT, Claude, Gemini i DeepSeek. AMR automatycznie kieruje każdy krok do właściwego modelu frontier, rozlicza według rzeczywistego zużycia tokenów i pokazuje saldo oraz historię żądań w jednej konsoli.',
+      chips: ['20+ flagowych modeli', 'Zero konfiguracji', 'SOTA Harness For Design', 'Rozliczenie za realne tokeny'],
+      cta: 'Poznaj AMR',
+      logosAriaLabel: 'Wbudowane modele frontier',
+      moreAriaLabel: 'i więcej',
+    },
     hero: {
       label: 'Studio designu open source',
       titlePrefix: 'Claude Design',
@@ -3868,6 +4605,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'Open-source alternatywa dla Claude Design. Local-first, BYOK, Apache-2.0.', download: 'Pobierz desktop' },
   },
   id: {
+    amrBand: {
+      kicker: 'Open Design AMR · Agen desain',
+      title: 'Agent dan LLM terbaik dunia, menggerakkan Open Design',
+      lead: 'Isi saldo sekali dan pakai GPT, Claude, Gemini, dan DeepSeek. AMR otomatis merutekan setiap langkah ke model frontier yang tepat, menagih berdasarkan pemakaian token nyata, dan menyatukan saldo serta riwayat permintaan dalam satu konsol.',
+      chips: ['20+ model unggulan', 'Tanpa konfigurasi', 'SOTA Harness For Design', 'Tagihan per token nyata'],
+      cta: 'Jelajahi AMR',
+      logosAriaLabel: 'Model frontier bawaan',
+      moreAriaLabel: 'dan lainnya',
+    },
     hero: {
       label: 'Studio desain open source',
       titlePrefix: 'Claude Design',
@@ -3888,6 +4634,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'Alternatif open source untuk Claude Design. Local-first, BYOK, Apache-2.0.', download: 'Unduh desktop' },
   },
   nl: {
+    amrBand: {
+      kicker: 'Open Design AMR · Design-agent',
+      title: '’s Werelds beste Agents en LLM’s, krachtbron van Open Design',
+      lead: 'Eén keer opwaarderen en GPT, Claude, Gemini en DeepSeek gebruiken. AMR routeert elke stap automatisch naar het juiste frontier-model, rekent af op werkelijk tokengebruik en toont saldo en aanvraaggeschiedenis in één console.',
+      chips: ['20+ vlaggenschipmodellen', 'Geen configuratie', 'SOTA Harness For Design', 'Afrekenen op echte tokens'],
+      cta: 'Ontdek AMR',
+      logosAriaLabel: 'Ingebouwde frontier-modellen',
+      moreAriaLabel: 'en meer',
+    },
     hero: {
       label: 'Open-source designstudio',
       titlePrefix: 'Claude Design',
@@ -3908,6 +4663,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'Het open-source alternatief voor Claude Design. Local-first, BYOK, Apache-2.0.', download: 'Desktop downloaden' },
   },
   ar: {
+    amrBand: {
+      kicker: 'Open Design AMR · وكيل التصميم',
+      title: 'أفضل الوكلاء ونماذج LLM في العالم، تشغّل Open Design',
+      lead: 'اشحن مرة واحدة واستخدم GPT و Claude و Gemini و DeepSeek. يوجّه AMR كل خطوة تلقائيًا إلى النموذج الرائد المناسب، ويحاسب حسب الاستهلاك الفعلي للتوكنات، ويعرض الرصيد وسجل الطلبات في وحدة تحكم واحدة.',
+      chips: ['أكثر من 20 نموذجًا رائدًا', 'بدون إعداد', 'SOTA Harness For Design', 'محاسبة بالتوكن الفعلي'],
+      cta: 'استكشف AMR',
+      logosAriaLabel: 'نماذج رائدة مدمجة',
+      moreAriaLabel: 'والمزيد',
+    },
     hero: {
       label: 'استوديو تصميم مفتوح المصدر',
       titlePrefix: 'Claude Design',
@@ -3928,6 +4692,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: 'البديل مفتوح المصدر لـ Claude Design. محلي أولاً، BYOK، Apache-2.0.', download: 'تنزيل سطح المكتب' },
   },
   tr: {
+    amrBand: {
+      kicker: 'Open Design AMR · Tasarım Ajanı',
+      title: 'Open Design’a güç veren dünyanın en iyi Agent ve LLM’leri',
+      lead: 'Bir kez yükleyin; GPT, Claude, Gemini ve DeepSeek’i kullanın. AMR her adımı otomatik olarak doğru sınır modeline yönlendirir, gerçek token kullanımına göre ücretlendirir ve bakiye ile istek geçmişini tek konsolda gösterir.',
+      chips: ['20+ amiral gemisi model', 'Sıfır kurulum', 'SOTA Harness For Design', 'Gerçek token bazlı faturalama'],
+      cta: 'AMR’yi keşfedin',
+      logosAriaLabel: 'Yerleşik sınır modelleri',
+      moreAriaLabel: 've daha fazlası',
+    },
     hero: {
       label: 'Açık kaynak tasarım stüdyosu',
       titlePrefix: 'Claude Design',
@@ -3948,6 +4721,15 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
     footer: { summary: "Claude Design'ın açık kaynak alternatifi. Local-first, BYOK, Apache-2.0.", download: 'Desktop indir' },
   },
   uk: {
+    amrBand: {
+      kicker: 'Open Design AMR · Агент дизайну',
+      title: 'Найкращі у світі агенти та LLM рухають Open Design',
+      lead: 'Поповніть рахунок один раз і користуйтеся GPT, Claude, Gemini та DeepSeek. AMR автоматично спрямовує кожен крок до відповідної передової моделі, тарифікує за реальним використанням токенів і показує баланс та історію запитів в одній консолі.',
+      chips: ['20+ флагманських моделей', 'Нуль налаштувань', 'SOTA Harness For Design', 'Оплата за реальні токени'],
+      cta: 'Дізнатися про AMR',
+      logosAriaLabel: 'Вбудовані передові моделі',
+      moreAriaLabel: 'та інші',
+    },
     hero: {
       label: 'Open-source дизайн-студія',
       titlePrefix: 'Open-source',
@@ -3995,6 +4777,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: '姉妹プロジェクト',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   ko: {
@@ -4020,6 +4803,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: '자매 프로젝트',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   de: {
@@ -4045,6 +4829,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'Schwesterprojekte',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   fr: {
@@ -4070,6 +4855,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'Projets sœurs',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   ru: {
@@ -4095,6 +4881,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'Родственные проекты',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   es: {
@@ -4120,6 +4907,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'Proyectos relacionados',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   'pt-br': {
@@ -4145,6 +4933,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'Projetos irmãos',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   it: {
@@ -4170,6 +4959,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'Progetti correlati',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   vi: {
@@ -4195,6 +4985,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'Dự án liên quan',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   pl: {
@@ -4220,6 +5011,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'Projekty siostrzane',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   id: {
@@ -4245,6 +5037,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'Proyek terkait',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   nl: {
@@ -4270,6 +5063,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'Zusterprojecten',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   ar: {
@@ -4295,6 +5089,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     xTwitter: 'X / Twitter',
     sisterProjects: 'المشاريع الشقيقة',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
   },
   tr: {
@@ -4318,6 +5113,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     rss: 'RSS',
     sisterProjects: 'Kardeş projeler',
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
     bottomLeft: '● Open Design · Apache-2.0 · 2026 / Cilt 01 / Sayı Nº 26',
     bottomRight: 'Berlin / Açık / Dünya · 52.5200° N · 13.4050° E',
@@ -4343,6 +5139,7 @@ const LOCALIZED_LANDING_FOOTER_COPY: Partial<
     rss: 'RSS',
     sisterProjects: "Пов'язані проєкти",
     htmlAnything: 'HTML Anything',
+    htmlVideo: 'HTML Video',
     nexuIo: 'nexu.io',
     bottomLeft: '● Open Design · Apache-2.0 · 2026 / Том 01 / Випуск № 26',
     bottomRight: 'Берлін / Відкрито / Земля · 52.5200° N · 13.4050° E',
@@ -5428,15 +6225,15 @@ export function getLandingUiCopy(locale: LandingLocaleCode): LandingUiCopy {
 
 export function getHomePageCopy(locale: LandingLocaleCode): HomePageCopy {
   const exactCopy = HOME_PAGE_COPY[locale];
-  if (exactCopy) return exactCopy;
+  if (exactCopy) {
+    return mergeCopy(exactCopy, FIRST_SCREEN_COPY_OVERRIDES[locale]);
+  }
   const localizedHomeBodyCopy = mergeCopy(
     LOCALIZED_HOME_BODY_COPY[locale] ?? {},
     EXTRA_LOCALIZED_HOME_BODY_COPY[locale] ?? {},
   );
-  const copy = mergeCopy(
-    mergeCopy(HOME_PAGE_COPY_EN, HOME_PAGE_COPY_OVERRIDES[locale]),
-    localizedHomeBodyCopy,
-  );
+  let copy = mergeCopy(mergeCopy(HOME_PAGE_COPY_EN, HOME_PAGE_COPY_OVERRIDES[locale]), localizedHomeBodyCopy);
+  copy = mergeCopy(copy, FIRST_SCREEN_COPY_OVERRIDES[locale]);
   const footerOverride = LOCALIZED_HOME_FOOTER_COPY[locale];
   return footerOverride ? mergeCopy(copy, { footer: footerOverride }) : copy;
 }
