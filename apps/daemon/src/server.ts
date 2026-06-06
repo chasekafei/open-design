@@ -4492,7 +4492,7 @@ export async function startServer({
     // 403 gates use (see mcp-routes.ts, media-routes.ts). Non-browser
     // callers (no Origin) still fall through to the bearer check below,
     // so curl/CLI agents must continue to present the token.
-    const ssePathSet = new Set(['/api/memory/events']);
+    const ssePathSet = new Set(['/memory/events']);
     app.use('/api', (req, res, next) => {
       if (openProbePaths.has(req.path)) return next();
       if (
