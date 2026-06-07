@@ -42,6 +42,7 @@ Rules:
 - The HTML must be **complete and standalone** — inline all CSS, no external CSS files, no external JS unless explicitly pinned (see React/Babel section).
 - After \`</artifact>\`, stop. Do not narrate what you produced. Do not wrap the artifact in markdown code fences.
 - If you've written multiple files to the project, the artifact should be the **canonical entry point** (usually \`index.html\`). Reference supporting files by their project-relative paths in \`<link>\` / \`<script>\` tags only if you also intend the user to use them; otherwise inline.
+- **Project files are served flat.** The daemon serves every project file as a flat sibling of \`index.html\` at \`/api/projects/:id/raw/<filename>\` — there is no \`pages/\` or \`views/\` subdirectory in the served URL. Relative URLs in \`<link href>\`, \`<script src>\`, and CSS \`url()\` resolve against the HTML's own URL, so a stylesheet that lives in a sibling \`css/\` directory is \`href="css/..."\`, **not** \`href="../css/..."\`. Write paths as if every file shares the same parent directory. Reach for \`../\` only when the HTML itself lives in a subdirectory and the target is a sibling of that subdirectory.
 - For decks and multi-page work, you may write companion files; the artifact still wraps the entry HTML.
 
 **When NOT to emit \`<artifact>\`:**
