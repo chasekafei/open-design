@@ -1411,11 +1411,58 @@ export function resolveStaticSpaFallbackPath(req, staticDir) {
   return indexPath;
 }
 
-export function registerStaticSpaFallback(app, staticDir) {
+// Loader script injected into index.html so the web UI can include the
+// daemon API token in same-origin /api/* fetch calls.  This is
+// load-bearing for reverse-proxy deployments (Railway, Fly.io, etc.)
+// where the browser is not on loopback and the bearer middleware would
+// otherwise reject every API call from the web UI.  The wrapper reads
+// the token from `window.__OD_API_TOKEN__` so a stale script tag in a
+// cached HTML page still works.
+export function buildApiTokenBootstrapScript(apiToken) {
+  // JSON.stringify leaves `<` and `>` unescaped, which lets a token
+  // containing `</script>` terminate the surrounding <script> early
+  // and execute attacker-controlled HTML.  Re-encode the angle brackets
+  // after stringifying so the script body stays inert.
+  const safeToken = JSON.stringify(apiToken).replace(/</g, '\\u003c');
+  return [
+    '<script>',
+    `window.__OD_API_TOKEN__=${safeToken};`,
+    '(function(){',
+    'var t=window.__OD_API_TOKEN__,f=window.fetch;',
+    'window.fetch=function(i,o){',
+    'o=o||{};var h=new Headers(o.headers||{});',
+    'var u=typeof i==="string"?i:i.url;',
+    // Request.url is the fully-resolved URL (includes origin).  Strip
+    // the origin so startsWith("/api/") matches both relative and
+    // absolute same-origin URLs.
+    'u=u?u.replace(/^https?:\\/\\/[^/]+/,""):"";',
+    'if(u.startsWith("/api/")&&!h.has("Authorization")){',
+    'h.set("Authorization","Bearer "+t);',
+    '}',
+    'o.headers=h;return f.call(this,i,o);',
+    '};',
+    '})();',
+    '</script>',
+  ].join('');
+}
+
+export function renderIndexHtmlWithToken(indexPath, apiToken) {
+  const raw = fs.readFileSync(indexPath, 'utf-8');
+  if (!apiToken) return raw;
+  return raw.replace('<head>', `<head>${buildApiTokenBootstrapScript(apiToken)}`);
+}
+
+export function registerStaticSpaFallback(app, staticDir, options) {
+  const apiToken = (options?.apiToken ?? '').trim();
   app.get('/*splat', (req, res, next) => {
     const indexPath = resolveStaticSpaFallbackPath(req, staticDir);
     if (indexPath == null) return next();
-    res.sendFile(indexPath);
+    try {
+      const html = renderIndexHtmlWithToken(indexPath, apiToken);
+      res.type('html').send(html);
+    } catch {
+      next();
+    }
   });
 }
 
@@ -5105,28 +5152,7 @@ export async function startServer({
       const indexHtml = path.join(STATIC_DIR, 'index.html');
       app.get(['/', '/index.html'], (_req, res, next) => {
         try {
-          const raw = fs.readFileSync(indexHtml, 'utf-8');
-          const script = [
-            '<script>',
-            `window.__OD_API_TOKEN__=${JSON.stringify(apiToken)};`,
-            '(function(){',
-            'var t=window.__OD_API_TOKEN__,f=window.fetch;',
-            'window.fetch=function(i,o){',
-            'o=o||{};var h=new Headers(o.headers||{});',
-            'var u=typeof i==="string"?i:i.url;',
-            // Request.url is the fully-resolved URL (includes origin).
-            // Strip the origin so startsWith("/api/") matches both
-            // relative and absolute same-origin URLs.
-            'u=u?u.replace(/^https?:\\/\\/[^/]+/,""):"";',
-            'if(u.startsWith("/api/")&&!h.has("Authorization")){',
-            'h.set("Authorization","Bearer "+t);',
-            '}',
-            'o.headers=h;return f.call(this,i,o);',
-            '};',
-            '})();',
-            '</script>',
-          ].join('');
-          res.type('html').send(raw.replace('<head>', `<head>${script}`));
+          res.type('html').send(renderIndexHtmlWithToken(indexHtml, apiToken));
         } catch {
           next();
         }
@@ -15015,7 +15041,7 @@ export async function startServer({
     telemetry: { reportFinalizedMessage, reportFeedback },
   });
 
-  registerStaticSpaFallback(app, STATIC_DIR);
+  registerStaticSpaFallback(app, STATIC_DIR, { apiToken });
 
   // Wait for `listen` to bind so callers always see the resolved URL —
   // critical when port=0 (ephemeral port) and when the embedding sidecar

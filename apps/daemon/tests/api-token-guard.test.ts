@@ -12,9 +12,17 @@
 // the "refuse 0.0.0.0 without token" path is exercised by a separate
 // negative case that constructs the start call directly).
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type http from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { startServer } from '../src/server.js';
+import {
+  buildApiTokenBootstrapScript,
+  registerStaticSpaFallback,
+  resolveStaticSpaFallbackPath,
+  startServer,
+} from '../src/server.js';
 
 const PREVIOUS_TOKEN = process.env.OD_API_TOKEN;
 const PREVIOUS_HOST  = process.env.OD_BIND_HOST;
@@ -22,12 +30,15 @@ const PREVIOUS_HOST  = process.env.OD_BIND_HOST;
 let server: http.Server | undefined;
 let baseUrl = '';
 let shutdown: (() => Promise<void> | void) | undefined;
+let staticFixtureDir: string | undefined;
 
 afterEach(async () => {
   if (shutdown) await Promise.resolve(shutdown());
   if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   server = undefined;
   shutdown = undefined;
+  if (staticFixtureDir) fs.rmSync(staticFixtureDir, { recursive: true, force: true });
+  staticFixtureDir = undefined;
   if (PREVIOUS_TOKEN === undefined) delete process.env.OD_API_TOKEN;
   else process.env.OD_API_TOKEN = PREVIOUS_TOKEN;
   if (PREVIOUS_HOST === undefined) delete process.env.OD_BIND_HOST;
@@ -108,5 +119,73 @@ describe('bearer middleware', () => {
       headers: { origin: 'null' },
     });
     expect(resp.status).toBe(403);
+  });
+
+  it('injects the API token bootstrap script into SPA fallback HTML', async () => {
+    // The bearer middleware alone is not enough on a reverse-proxy
+    // deploy — the browser needs the token to attach as a header on
+    // outgoing /api/* fetches.  The script is injected into any HTML
+    // page the daemon serves, including SPA route fallbacks like
+    // /projects/<id>, not just the root index.  This covers the
+    // `registerStaticSpaFallback` path directly so the test does not
+    // depend on the production web build output existing.
+    const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-spa-fallback-'));
+    staticFixtureDir = fixtureDir;
+    fs.writeFileSync(path.join(fixtureDir, 'index.html'), '<!doctype html><html><head></head><body></body></html>');
+
+    const express = (await import('express')).default;
+    const app = express();
+    registerStaticSpaFallback(app, fixtureDir, { apiToken: 'secret-test-token' });
+    const local = await new Promise<http.Server>((resolve) => {
+      const s = app.listen(0, '127.0.0.1', () => resolve(s));
+    });
+    const port = (local.address() as { port: number }).port;
+    try {
+      const splat = await fetch(`http://127.0.0.1:${port}/projects/some-id`, {
+        headers: { accept: 'text/html' },
+      });
+      expect(splat.status).toBe(200);
+      const body = await splat.text();
+      expect(body).toContain('__OD_API_TOKEN__');
+      expect(body).toContain('Authorization');
+      // Token value must not leak verbatim — JSON.stringify wraps it.
+      expect(body).toMatch(/__OD_API_TOKEN__="secret-test-token"/);
+    } finally {
+      await new Promise<void>((r) => local.close(() => r()));
+    }
+  });
+});
+
+describe('renderIndexHtmlWithToken helper', () => {
+  let fixtureDir: string | undefined;
+
+  afterEach(() => {
+    if (fixtureDir) fs.rmSync(fixtureDir, { recursive: true, force: true });
+    fixtureDir = undefined;
+  });
+
+  it('returns raw HTML when no token is set', async () => {
+    const { renderIndexHtmlWithToken } = await import('../src/server.js');
+    fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-token-render-'));
+    const idx = path.join(fixtureDir, 'index.html');
+    fs.writeFileSync(idx, '<html><head></head></html>');
+    expect(renderIndexHtmlWithToken(idx, '')).toBe('<html><head></head></html>');
+  });
+
+  it('inserts bootstrap script into <head>', async () => {
+    const { renderIndexHtmlWithToken } = await import('../src/server.js');
+    fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-token-render-'));
+    const idx = path.join(fixtureDir, 'index.html');
+    fs.writeFileSync(idx, '<html><head></head><body></body></html>');
+    const out = renderIndexHtmlWithToken(idx, 'tok-123');
+    expect(out).toMatch(/<head><script>[\s\S]*__OD_API_TOKEN__="tok-123"[\s\S]*<\/script>/);
+  });
+
+  it('rejects browser-side script injection by JSON-encoding the token', () => {
+    const script = buildApiTokenBootstrapScript('</script><script>alert(1)</script>');
+    // The closing </script> in the token must be escaped so the
+    // browser does not terminate the surrounding <script> early.
+    expect(script).not.toContain('</script>alert');
+    expect(script).toContain('\\u003c');
   });
 });
