@@ -132,7 +132,10 @@ ENV OD_PORT=7456
 EXPOSE 7456
 
 # Stay as root so the entrypoint can fix volume permissions (platforms
-# like Railway mount volumes as root).  Privileges are dropped to the
-# open-design user right before the daemon starts.
+# like Railway mount volumes as root).  OD_DATA_DIR overrides the
+# default data root, so make sure whatever path it points at exists
+# and is owned by the runtime user before dropping privileges.
+# Privileges are dropped to the open-design user right before the
+# daemon starts.
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "-c", "chown -R open-design:open-design /app/.od 2>/dev/null || true && exec su-exec open-design node apps/daemon/dist/cli.js --no-open"]
+CMD ["sh", "-c", "DATA_DIR=\"${OD_DATA_DIR:-/app/.od}\"; mkdir -p \"$DATA_DIR\"; chown -R open-design:open-design \"$DATA_DIR\" 2>/dev/null || true; exec su-exec open-design node apps/daemon/dist/cli.js --no-open"]
