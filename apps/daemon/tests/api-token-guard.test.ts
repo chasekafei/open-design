@@ -83,4 +83,30 @@ describe('bearer middleware', () => {
       expect(resp.status).toBe(200);
     }
   });
+
+  it('lets file viewer HTML previews load with Origin: null (sandboxed iframe)', async () => {
+    // The file viewer renders HTML previews inside an iframe with
+    // `sandbox="allow-scripts allow-downloads"` (no allow-same-origin),
+    // so the request carries `Origin: null` and no Authorization.
+    // The route still 404s for the missing project, but the bearer
+    // middleware must let it through — a 401 here would mean the
+    // iframe never gets to render.
+    const resp = await fetch(`${baseUrl}/api/projects/missing/raw/design.html`, {
+      headers: { origin: 'null' },
+    });
+    expect(resp.status).not.toBe(401);
+  });
+
+  it('rejects non-GET methods to the project file endpoint behind Origin: null', async () => {
+    // The Origin: null bypass only covers read-only GET — DELETE on
+    // the same path is a state-changing operation and must keep the
+    // bearer requirement. The route's own auth still rejects this, so
+    // we only need to assert we never see the 401 from the bearer
+    // gate (the cross-origin middleware produces 403 for bad methods).
+    const resp = await fetch(`${baseUrl}/api/projects/missing/raw/design.html`, {
+      method: 'DELETE',
+      headers: { origin: 'null' },
+    });
+    expect(resp.status).toBe(403);
+  });
 });

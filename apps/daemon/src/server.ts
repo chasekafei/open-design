@@ -4557,6 +4557,16 @@ export async function startServer({
     // boundary. Pattern covers the three GET endpoints registered
     // below at /api/plugins/:id/{preview,example/:name,asset/*splat}.
     const pluginIframePathRe = /^\/plugins\/[^/]+\/(?:preview|example\/[^/]+|asset\/.+)$/u;
+    // File viewer HTML previews load via `<iframe src=...>` with
+    // `sandbox="allow-scripts allow-downloads"` (no allow-same-origin),
+    // so the request carries `Origin: null` and cannot set
+    // Authorization. The cross-origin middleware at line 4877 already
+    // accepts `Origin: null` for /projects/:id/raw/...; mirror that
+    // exception here so the bearer check does not 401 the iframe
+    // before the cross-origin check has a chance. A same-origin
+    // browser request (e.g. an iframe with allow-same-origin) is
+    // accepted through the normal `isLocalSameOrigin` branch.
+    const projectFilePathRe = /^\/projects\/[^/]+\/raw\/.+$/u;
     app.use('/api', (req, res, next) => {
       if (openProbePaths.has(req.path)) return next();
       if (
@@ -4572,6 +4582,10 @@ export async function startServer({
         isLocalSameOrigin(req, resolvedPort)
       ) {
         return next();
+      }
+      if (req.method === 'GET' && projectFilePathRe.test(req.path)) {
+        if (req.headers.origin === 'null') return next();
+        if (isLocalSameOrigin(req, resolvedPort)) return next();
       }
       if (req.method === 'GET') {
         const previewAsset = parseProjectPreviewAssetPath(req.path);
