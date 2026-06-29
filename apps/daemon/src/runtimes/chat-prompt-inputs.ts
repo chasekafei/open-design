@@ -294,14 +294,20 @@ export function resolveChatExtraAllowedDirs({
   agentId,
   skillsDir,
   designSystemsDir,
+  designTemplatesDir,
+  userDesignTemplatesDir,
   linkedDirs = [],
+  activeSkillDirs = [],
   codexGeneratedImagesDir,
   existsSync = fs.existsSync,
 }: {
   agentId?: string | null;
   skillsDir?: string | null;
   designSystemsDir?: string | null;
+  designTemplatesDir?: string | null;
+  userDesignTemplatesDir?: string | null;
   linkedDirs?: Array<string | null | undefined>;
+  activeSkillDirs?: Array<string | null | undefined>;
   codexGeneratedImagesDir?: string | null;
   existsSync?: (path: string) => boolean;
 }): string[] {
@@ -312,7 +318,10 @@ export function resolveChatExtraAllowedDirs({
     : [
         skillsDir,
         designSystemsDir,
+        designTemplatesDir,
+        userDesignTemplatesDir,
         ...(Array.isArray(linkedDirs) ? linkedDirs : []),
+        ...(Array.isArray(activeSkillDirs) ? activeSkillDirs : []),
       ];
   return Array.from(
     new Set(

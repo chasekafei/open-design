@@ -3086,14 +3086,20 @@ describe('chat prompt helpers', () => {
     const existingDirs = new Set([
       '/repo/skills',
       '/repo/design-systems',
+      '/repo/design-templates',
+      '/repo/user-design-templates',
       '/linked/reference',
+      '/app/design-templates/mobile-app',
       '/home/tester/.codex/generated_images',
     ]);
     const dirs = resolveChatExtraAllowedDirs({
       agentId: 'claude',
       skillsDir: '/repo/skills',
       designSystemsDir: '/repo/design-systems',
+      designTemplatesDir: '/repo/design-templates',
+      userDesignTemplatesDir: '/repo/user-design-templates',
       linkedDirs: ['/linked/reference'],
+      activeSkillDirs: ['/app/design-templates/mobile-app'],
       codexGeneratedImagesDir: '/home/tester/.codex/generated_images',
       existsSync: (dir: string) => existingDirs.has(dir),
     });
@@ -3101,7 +3107,10 @@ describe('chat prompt helpers', () => {
     expect(dirs).toEqual([
       '/repo/skills',
       '/repo/design-systems',
+      '/repo/design-templates',
+      '/repo/user-design-templates',
       '/linked/reference',
+      '/app/design-templates/mobile-app',
     ]);
   });
 

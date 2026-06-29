@@ -5826,10 +5826,11 @@ export async function startServer({
     //      path inside its working directory. We copy (not symlink) so
     //      each staged directory is a true write barrier — agents cannot
     //      mutate the shipped repo resource through their cwd.
-    //   2. `--add-dir` allowlist. For non-Codex agents, pass `SKILLS_DIR`
-    //      and `DESIGN_SYSTEMS_DIR` so the absolute fallback path in the
-    //      preamble is reachable when staging fails (e.g. the project has
-    //      no on-disk cwd, or fs.cp errored). Codex treats `--add-dir`
+    //   2. `--add-dir` allowlist. For non-Codex agents, pass `SKILLS_DIR`,
+    //      `DESIGN_TEMPLATES_DIR`, and `DESIGN_SYSTEMS_DIR` so the absolute
+    //      fallback path in the preamble is reachable when staging fails
+    //      (e.g. the project has no on-disk cwd, or fs.cp errored). Codex
+    //      treats `--add-dir`
     //      entries as writable, so Codex receives only the narrow
     //      `${CODEX_HOME:-$HOME/.codex}/generated_images` output folder
     //      for allowlisted gpt-image image projects.
@@ -5888,7 +5889,13 @@ export async function startServer({
       codexGeneratedImagesDir = validateCodexGeneratedImagesDir(
         codexGeneratedImagesDir,
         {
-          protectedDirs: [SKILLS_DIR, DESIGN_SYSTEMS_DIR, ...linkedDirs],
+          protectedDirs: [
+            SKILLS_DIR,
+            DESIGN_SYSTEMS_DIR,
+            DESIGN_TEMPLATES_DIR,
+            USER_DESIGN_TEMPLATES_DIR,
+            ...linkedDirs,
+          ],
         },
       );
     }
@@ -5896,7 +5903,10 @@ export async function startServer({
       agentId,
       skillsDir: SKILLS_DIR,
       designSystemsDir: DESIGN_SYSTEMS_DIR,
+      designTemplatesDir: DESIGN_TEMPLATES_DIR,
+      userDesignTemplatesDir: USER_DESIGN_TEMPLATES_DIR,
       linkedDirs,
+      activeSkillDirs,
       codexGeneratedImagesDir,
     });
     const codexImagegenOverride = resolveGrantedCodexImagegenOverride({
