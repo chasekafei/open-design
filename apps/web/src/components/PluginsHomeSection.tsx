@@ -14,15 +14,17 @@
 // override live in `./plugins-home/usePluginFacets.ts`. This file
 // owns layout only.
 
+import { Button, Input } from '@open-design/components';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { InstalledPluginRecord } from '@open-design/contracts';
 import { useI18n, useT } from '../i18n';
 import type { PluginShareAction } from '../state/projects';
 import { Icon } from './Icon';
 import { PluginCard } from './plugins-home/PluginCard';
-import { isFeaturedPlugin, type FacetOption, type FacetSelection } from './plugins-home/facets';
+import { isFeaturedPlugin, type FacetOption } from './plugins-home/facets';
 import { localizePluginTitle } from './plugins-home/localization';
 import { usePluginFacets } from './plugins-home/usePluginFacets';
+import { pluginSubfacetLabel } from './plugins-home/subfacetLabel';
 import { useSavedPluginIds } from './plugins-home/savedPlugins';
 import type { PluginUseAction } from './plugins-home/useActions';
 import { Toast } from './Toast';
@@ -36,8 +38,10 @@ interface Props {
   loading: boolean;
   activePluginId: string | null;
   pendingApplyId: string | null;
+  pendingDuplicateId?: string | null;
   pendingShareAction?: { pluginId: string; action: PluginShareAction } | null;
   onUse: (record: InstalledPluginRecord, action: PluginUseAction) => void;
+  onDuplicate?: (record: InstalledPluginRecord) => void;
   onOpenDetails: (record: InstalledPluginRecord) => void;
   onPluginShareAction?: (
     record: InstalledPluginRecord,
@@ -45,15 +49,12 @@ interface Props {
   ) => void;
   onBrowseRegistry?: () => void;
   preferDefaultFacet?: boolean;
-  // Optional external selection. When the Home chip rail picks
-  // "Slide deck", HomeView passes { category: 'deck', subcategory:
-  // null } so the Community grid scrolls to the matching
-  // slice instead of staying on its default. The hook only re-applies
-  // when this identity changes, so manual facet clicks still win.
-  presetSelection?: FacetSelection | null;
   title?: string;
   subtitle?: string;
   emptyMessage?: string;
+  // 'gallery' renders each card as a minimal live example.html preview
+  // tile (Community); 'rich' keeps the hover-overlay metadata card.
+  cardLayout?: 'rich' | 'gallery';
 }
 
 export function PluginsHomeSection({
@@ -61,16 +62,18 @@ export function PluginsHomeSection({
   loading,
   activePluginId,
   pendingApplyId,
+  pendingDuplicateId = null,
   pendingShareAction = null,
   onUse,
+  onDuplicate,
   onOpenDetails,
   onPluginShareAction,
   onBrowseRegistry,
   preferDefaultFacet = true,
-  presetSelection = null,
   title,
   subtitle,
   emptyMessage,
+  cardLayout = 'rich',
 }: Props) {
   const { locale, t } = useI18n();
   const { savedPluginIds, savePluginId } = useSavedPluginIds();
@@ -95,7 +98,6 @@ export function PluginsHomeSection({
     plugins,
     savedPluginIds,
     preferDefaultFacet,
-    presetSelection,
     locale,
   });
   const renderedPlugins = useMemo(
@@ -182,6 +184,10 @@ export function PluginsHomeSection({
               selectedSlug={selection.category}
               totalVisible={totalVisible}
               onPick={pickCategory}
+              // The Saved collection lives on the rich management surface
+              // (PluginsView). The minimal Community gallery has no per-card
+              // save affordance, so the orthogonal Saved chip is hidden there.
+              showSaved={cardLayout === 'rich'}
               savedCount={savedList.length}
               savedActive={mode === 'saved'}
               onToggleSaved={() =>
@@ -212,7 +218,10 @@ export function PluginsHomeSection({
               </button>
             </div>
           ) : (
-            <div className="plugins-home__grid" role="list">
+            <div
+              className={`plugins-home__grid${cardLayout === 'gallery' ? ' plugins-home__grid--gallery' : ''}`}
+              role="list"
+            >
               {renderedPlugins.map((p) => (
                 <PluginCard
                   key={p.id}
@@ -220,13 +229,17 @@ export function PluginsHomeSection({
                   isActive={activePluginId === p.id}
                   isPending={pendingApplyId === p.id}
                   pendingAny={pendingApplyId !== null}
+                  isDuplicatePending={pendingDuplicateId === p.id}
+                  pendingDuplicateAny={pendingDuplicateId !== null}
                   pendingShareAction={pendingShareAction}
                   isFeatured={isFeaturedPlugin(p)}
                   isSaved={savedPluginIds.has(p.id)}
                   onUse={onUse}
+                  onDuplicate={onDuplicate}
                   onOpenDetails={onOpenDetails}
                   onSave={handleSavePlugin}
                   onShareAction={onPluginShareAction}
+                  layout={cardLayout}
                 />
               ))}
               {hasMorePlugins ? (
@@ -258,6 +271,9 @@ interface CategoryRowProps {
   selectedSlug: string | null;
   totalVisible: number;
   onPick: (slug: string | null) => void;
+  // The Saved override chip only renders on the rich management surface
+  // (PluginsView); the minimal Community gallery hides it.
+  showSaved: boolean;
   savedCount: number;
   savedActive: boolean;
   onToggleSaved: () => void;
@@ -265,16 +281,16 @@ interface CategoryRowProps {
   onQueryChange: (next: string) => void;
 }
 
-// Single combined filter bar: Saved override chip + category pills
-// on the left, search field on the right. Each chip carries its own
-// count, and the "All" chip doubles as a clear-filters affordance,
-// so a separate `X / Y` counter and `Clear` link would just repeat
-// what the chip strip already shows.
+// Single combined filter bar: an optional Saved override chip + category
+// pills on the left, search field on the right. The "All" pill doubles as a
+// clear-filters affordance, so a separate `X / Y` counter and `Clear` link
+// would just repeat what the pill strip already shows.
 function CategoryRow({
   options,
   selectedSlug,
   totalVisible,
   onPick,
+  showSaved,
   savedCount,
   savedActive,
   onToggleSaved,
@@ -293,23 +309,25 @@ function CategoryRow({
         role="tablist"
         aria-label={t('pluginsHome.categoryFilterAria')}
       >
-        <button
-          type="button"
-          className={[
-            'plugins-home__chip',
-            'plugins-home__chip--saved',
-            savedActive ? 'is-active' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          onClick={onToggleSaved}
-          aria-pressed={savedActive}
-          data-testid="plugins-home-chip-saved"
-        >
-          <Icon name="star" size={11} />
-          <span>{t('pluginsHome.featured')}</span>
-          <span className="plugins-home__chip-count">{savedCount}</span>
-        </button>
+        {showSaved ? (
+          <button
+            type="button"
+            className={[
+              'plugins-home__chip',
+              'plugins-home__chip--saved',
+              savedActive ? 'is-active' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={onToggleSaved}
+            aria-pressed={savedActive}
+            data-testid="plugins-home-chip-saved"
+          >
+            <Icon name="star" size={11} />
+            <span>{t('pluginsHome.featured')}</span>
+            <span className="plugins-home__chip-count">{savedCount}</span>
+          </button>
+        ) : null}
         <CategoryPill
           slug={null}
           label={t('common.all')}
@@ -449,7 +467,9 @@ function pluginFacetLabel(slug: string, fallback: string, t: ReturnType<typeof u
     case 'public-link': return t('pluginsHome.facet.publicLink');
     case 'github-pr': return t('pluginsHome.facet.githubPr');
     case 'github-gist': return t('pluginsHome.facet.githubGist');
-    default: return fallback;
+    // Subcategory pills render through the same CategoryPill, so unknown
+    // top-level slugs fall through to the subfacet table before giving up.
+    default: return pluginSubfacetLabel(slug, fallback, t);
   }
 }
 
@@ -469,7 +489,7 @@ function SearchInput({ value, onChange }: SearchInputProps) {
   return (
     <div className="plugins-home__search">
       <Icon name="search" size={12} className="plugins-home__search-icon" />
-      <input
+      <Input
         type="search"
         className="plugins-home__search-input"
         value={value}
@@ -481,15 +501,15 @@ function SearchInput({ value, onChange }: SearchInputProps) {
         autoComplete="off"
       />
       {value ? (
-        <button
-          type="button"
+        <Button
+          variant="subtle"
           className="plugins-home__search-clear"
           onClick={() => onChange('')}
           aria-label={t('pluginsHome.clearSearch')}
           data-testid="plugins-home-search-clear"
         >
           <Icon name="close" size={12} />
-        </button>
+        </Button>
       ) : null}
     </div>
   );

@@ -8,10 +8,12 @@ import { hashPackageSourcePath } from "./package-source-hash.js";
 import { readRuntimeAppVersion, versionFamilyForAppVersion } from "./versions.js";
 
 const WORKSPACE_BUILD_PACKAGES = [
+  { directory: "packages/release", name: "@open-design/release" },
   { directory: "packages/components", name: "@open-design/components" },
   { directory: "packages/contracts", name: "@open-design/contracts" },
   { directory: "packages/registry-protocol", name: "@open-design/registry-protocol" },
   { directory: "packages/sidecar-proto", name: "@open-design/sidecar-proto" },
+  { directory: "packages/launcher-proto", name: "@open-design/launcher-proto" },
   { directory: "packages/sidecar", name: "@open-design/sidecar" },
   { directory: "packages/platform", name: "@open-design/platform" },
   { directory: "packages/download", name: "@open-design/download" },
@@ -26,10 +28,12 @@ const WORKSPACE_BUILD_PACKAGES = [
 ] as const;
 
 const BUILD_COMMANDS = [
+  { args: ["--filter", "@open-design/release", "build"] },
   { args: ["--filter", "@open-design/components", "build"] },
   { args: ["--filter", "@open-design/contracts", "build"] },
   { args: ["--filter", "@open-design/registry-protocol", "build"] },
   { args: ["--filter", "@open-design/sidecar-proto", "build"] },
+  { args: ["--filter", "@open-design/launcher-proto", "build"] },
   { args: ["--filter", "@open-design/sidecar", "build"] },
   { args: ["--filter", "@open-design/platform", "build"] },
   { args: ["--filter", "@open-design/download", "build"] },
@@ -96,7 +100,7 @@ async function createWorkspaceBuildCacheKey(config: ToolPackConfig): Promise<str
     packageManager: await readPackageManager(config.workspaceRoot),
     platform: config.platform,
     pnpmLock: await hashPath(join(config.workspaceRoot, "pnpm-lock.yaml")),
-    schemaVersion: 6,
+    schemaVersion: 8,
     webOutputMode: config.webOutputMode,
   });
 }
@@ -109,12 +113,16 @@ function workspaceBuildOutputFiles(config: ToolPackConfig): string[] {
   return [
     "packages/components/dist/index.mjs",
     "packages/components/dist/index.d.ts",
+    "packages/release/dist/index.mjs",
+    "packages/release/dist/index.d.ts",
     "packages/contracts/dist/index.mjs",
     "packages/contracts/dist/index.d.ts",
     "packages/registry-protocol/dist/index.mjs",
     "packages/registry-protocol/dist/index.d.ts",
     "packages/sidecar-proto/dist/index.mjs",
     "packages/sidecar-proto/dist/index.d.ts",
+    "packages/launcher-proto/dist/index.mjs",
+    "packages/launcher-proto/dist/index.d.ts",
     "packages/sidecar/dist/index.mjs",
     "packages/sidecar/dist/index.d.ts",
     "packages/platform/dist/index.mjs",
@@ -145,9 +153,11 @@ function workspaceBuildOutputFiles(config: ToolPackConfig): string[] {
 function workspaceBuildArtifacts(config: ToolPackConfig): WorkspaceBuildArtifact[] {
   const artifacts = [
     "packages/components/dist",
+    "packages/release/dist",
     "packages/contracts/dist",
     "packages/registry-protocol/dist",
     "packages/sidecar-proto/dist",
+    "packages/launcher-proto/dist",
     "packages/sidecar/dist",
     "packages/platform/dist",
     "packages/download/dist",
@@ -218,6 +228,14 @@ const WEB_STANDALONE_APP_NODE_MODULES = "apps/web/node_modules";
 // of the standalone tree and the audit aborts the packaged build.
 const STANDALONE_HOISTED_PEER_DEPS = ["react", "react-dom", "styled-jsx"];
 
+async function symlinkDirectoryForWorkspaceBuild(target: string, linkPath: string): Promise<void> {
+  if (process.platform === "win32") {
+    await symlink(target, linkPath, "junction");
+    return;
+  }
+  await symlink(relative(dirname(linkPath), target), linkPath, "dir");
+}
+
 async function hoistStandaloneNextPeerDeps(standaloneRoot: string): Promise<void> {
   const appNodeModules = join(standaloneRoot, WEB_STANDALONE_APP_NODE_MODULES);
   const pnpmRoot = join(standaloneRoot, "node_modules", ".pnpm");
@@ -245,12 +263,11 @@ async function hoistStandaloneNextPeerDeps(standaloneRoot: string): Promise<void
     if (!match) continue;
     const target = join(pnpmRoot, match, "node_modules", pkg);
     if (!(await pathExists(target))) continue;
-    const relativeTarget = relative(dirname(linkPath), target);
     // Idempotent re-run: drop any pre-existing entry (stale symlink
     // from a previous build with different react/react-dom versions)
     // before recreating, so repeated invocations don't EEXIST.
     if (existing) await unlink(linkPath).catch(() => undefined);
-    await symlink(relativeTarget, linkPath);
+    await symlinkDirectoryForWorkspaceBuild(target, linkPath);
   }
 }
 

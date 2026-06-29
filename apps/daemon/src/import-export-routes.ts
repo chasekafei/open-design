@@ -1,5 +1,7 @@
 import type { Express } from 'express';
+import { PROJECT_EXPORT_MANIFEST_SCHEMA, isExportFormat } from '@open-design/contracts';
 import nodePath from 'node:path';
+import { readFile, rm } from 'node:fs/promises';
 import type { RouteDeps } from './server-context.js';
 import {
   InlineAssetsLimitError,
@@ -7,7 +9,9 @@ import {
   inlineRelativeAssets,
   type InlineAssetReader,
 } from './inline-assets.js';
-import { isSandboxModeEnabled } from './sandbox-mode.js';
+import { authorizeReasoningEgress, sendReasoningEgressDenial } from './reasoning-egress.js';
+import { sandboxImportedProjectRootUnavailableReason } from './sandbox-mode.js';
+import { parseOrchestratorWorkspace } from './workspace-contract.js';
 
 export interface RegisterImportRoutesDeps extends RouteDeps<'db' | 'http' | 'uploads' | 'node' | 'ids' | 'paths' | 'imports' | 'auth' | 'projectStore' | 'conversations' | 'projectFiles' | 'validation'> {}
 
@@ -30,11 +34,6 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
   const { insertConversation } = ctx.conversations;
   const { setTabs } = ctx.projectFiles;
   const { validateProjectDesignSystemId } = ctx.validation;
-  const rejectSandboxFolderImport = () =>
-    isSandboxModeEnabled(process.env)
-      ? 'folder imports are disabled when OD_SANDBOX_MODE is enabled'
-      : null;
-
   app.post(
     '/api/import/claude-design',
     importUpload.single('file'),
@@ -110,14 +109,21 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
       if (!existing) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
-      const { baseDir } = req.body || {};
+      const { baseDir, orchestratorWorkspace } = req.body || {};
       if (typeof baseDir !== 'string' || !baseDir.trim()) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'baseDir required');
       }
-      const sandboxReason = rejectSandboxFolderImport();
-      if (sandboxReason) {
-        return sendApiError(res, 400, 'BAD_REQUEST', sandboxReason);
+      const parsedOrchestratorWorkspace =
+        parseOrchestratorWorkspace(orchestratorWorkspace);
+      if (!parsedOrchestratorWorkspace.ok) {
+        return sendApiError(
+          res,
+          400,
+          'BAD_REQUEST',
+          parsedOrchestratorWorkspace.message,
+        );
       }
+      const normalizedOrchestratorWorkspace = parsedOrchestratorWorkspace.value;
       let trustedPickerImport = false;
       if (isDesktopAuthGateActive()) {
         const secret = desktopAuthSecret();
@@ -185,15 +191,26 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
       ) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'cannot point at the data directory');
       }
+      const sandboxReason = normalizedOrchestratorWorkspace && trustedPickerImport
+        ? null
+        : sandboxImportedProjectRootUnavailableReason(normalizedPath);
+      if (sandboxReason) {
+        return sendApiError(res, 400, 'BAD_REQUEST', sandboxReason);
+      }
 
       const entryFile = await detectEntryFile(normalizedPath);
       const existingMeta = existing.metadata ?? {};
+      const { orchestratorWorkspace: _existingOrchestratorWorkspace, ...preservedMeta } =
+        existingMeta;
       const nextMeta = {
-        ...existingMeta,
+        ...preservedMeta,
         kind: existingMeta.kind ?? 'prototype',
         baseDir: normalizedPath,
         importedFrom: 'folder' as const,
         entryFile,
+        ...(normalizedOrchestratorWorkspace
+          ? { orchestratorWorkspace: normalizedOrchestratorWorkspace }
+          : {}),
         ...(trustedPickerImport ? { fromTrustedPicker: true as const } : {}),
       };
       const updated = updateProject(db, projectId, { metadata: nextMeta });
@@ -208,20 +225,27 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
       const body = { project: updated, baseDir: normalizedPath, entryFile };
       res.json(body);
     } catch (err: any) {
-      sendApiError(res, 400, 'BAD_REQUEST', String(err));
+      sendApiError(res, 400, 'BAD_REQUEST', String(err?.message || err));
     }
   });
 
   app.post('/api/import/folder', async (req, res) => {
     try {
-      const { baseDir, name, skillId, designSystemId } = req.body || {};
+      const { baseDir, name, skillId, designSystemId, orchestratorWorkspace } = req.body || {};
       if (typeof baseDir !== 'string' || !baseDir.trim()) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'baseDir required');
       }
-      const sandboxReason = rejectSandboxFolderImport();
-      if (sandboxReason) {
-        return sendApiError(res, 400, 'BAD_REQUEST', sandboxReason);
+      const parsedOrchestratorWorkspace =
+        parseOrchestratorWorkspace(orchestratorWorkspace);
+      if (!parsedOrchestratorWorkspace.ok) {
+        return sendApiError(
+          res,
+          400,
+          'BAD_REQUEST',
+          parsedOrchestratorWorkspace.message,
+        );
       }
+      const normalizedOrchestratorWorkspace = parsedOrchestratorWorkspace.value;
       let trustedPickerImport = false;
       if (isDesktopAuthGateActive()) {
         const secret = desktopAuthSecret();
@@ -301,6 +325,12 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
       ) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'cannot import the data directory');
       }
+      const sandboxReason = normalizedOrchestratorWorkspace && trustedPickerImport
+        ? null
+        : sandboxImportedProjectRootUnavailableReason(normalizedPath);
+      if (sandboxReason) {
+        return sendApiError(res, 400, 'BAD_REQUEST', sandboxReason);
+      }
 
       const id = randomId();
       const now = Date.now();
@@ -318,7 +348,6 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
           designSystemValidation.message,
         );
       }
-
       const project = insertProject(db, {
         id,
         name: projectName,
@@ -330,6 +359,9 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
           baseDir: normalizedPath,
           importedFrom: 'folder',
           entryFile,
+          ...(normalizedOrchestratorWorkspace
+            ? { orchestratorWorkspace: normalizedOrchestratorWorkspace }
+            : {}),
           ...(trustedPickerImport ? { fromTrustedPicker: true as const } : {}),
         },
         createdAt: now,
@@ -352,7 +384,7 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
       const body = { project, conversationId: cid, entryFile };
       res.json(body);
     } catch (err: any) {
-      sendApiError(res, 400, 'BAD_REQUEST', String(err));
+      sendApiError(res, 400, 'BAD_REQUEST', String(err?.message || err));
     }
   });
 
@@ -371,7 +403,9 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
     buildProjectArchive,
     buildBatchArchive,
     buildDesktopPdfExportInput,
+    buildDesktopArtifactExportInput,
     desktopPdfExporter,
+    desktopArtifactExporter,
     daemonUrlRef,
     sanitizeArchiveFilename,
   } = ctx.exports;
@@ -502,6 +536,74 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
       });
       const result = await desktopPdfExporter(input);
       res.json(result);
+    } catch (err: any) {
+      const status = err && err.code === 'ENOENT' ? 404 : 400;
+      sendApiError(
+        res,
+        status,
+        status === 404 ? 'FILE_NOT_FOUND' : 'BAD_REQUEST',
+        String(err?.message || err),
+      );
+    }
+  });
+
+  // Generic programmatic export (PDF / image) for the `od export` CLI.
+  // The web Download menu rasterizes client-side; this is the daemon → desktop
+  // Electron path. The desktop renderer writes the result to a temp file and
+  // returns its path; we stream those bytes back and remove the temp file.
+  app.post('/api/projects/:id/export', async (req, res) => {
+    if (typeof desktopArtifactExporter !== 'function') {
+      return sendApiError(
+        res,
+        501,
+        'UPSTREAM_UNAVAILABLE',
+        'programmatic export is only available when a desktop runtime is reachable',
+      );
+    }
+    try {
+      const { fileName, title, deck, format, imageFormat, width, height } = req.body || {};
+      if (typeof fileName !== 'string' || fileName.length === 0) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'fileName required');
+      }
+      if (!isExportFormat(format)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'invalid export format');
+      }
+      const input = await buildDesktopArtifactExportInput({
+        daemonUrl: daemonUrlRef.current,
+        deck: deck === true,
+        fileName,
+        format,
+        projectId: req.params.id,
+        projectsRoot: PROJECTS_DIR,
+        ...(typeof imageFormat === 'string' ? { imageFormat } : {}),
+        ...(typeof title === 'string' ? { title } : {}),
+        ...(Number.isFinite(width) ? { width } : {}),
+        ...(Number.isFinite(height) ? { height } : {}),
+      });
+      const result = await desktopArtifactExporter(input);
+      if (!result || result.ok !== true || typeof result.path !== 'string') {
+        return sendApiError(res, 502, 'UPSTREAM_UNAVAILABLE', (result && result.error) || 'export failed');
+      }
+      try {
+        const buffer = await readFile(result.path);
+        const mime = result.mime || 'application/octet-stream';
+        const ext =
+          mime === 'image/jpeg' ? 'jpg'
+          : mime === 'image/png' ? 'png'
+          : mime === 'application/pdf' ? 'pdf'
+          : 'bin';
+        const slug = sanitizeArchiveFilename(input.title) || 'artifact';
+        const filename = `${slug}.${ext}`;
+        const asciiFallback = filename.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '_') || `artifact.${ext}`;
+        res.setHeader('Content-Type', mime);
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        );
+        res.send(buffer);
+      } finally {
+        void rm(nodePath.dirname(result.path), { force: true, recursive: true }).catch(() => {});
+      }
     } catch (err: any) {
       const status = err && err.code === 'ENOENT' ? 404 : 400;
       sendApiError(
@@ -657,9 +759,18 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
         };
       };
 
-      const rendered = await inlineRelativeAssets(
-        file.buffer.toString('utf8'),
+      const exportSource = await resolveHtmlExportSource({
+        projectId: req.params.id,
+        projectsRoot: PROJECTS_DIR,
         relPath,
+        html: file.buffer.toString('utf8'),
+        metadata: project?.metadata,
+        readProjectFile,
+        resolveProjectFilePath,
+      });
+      const rendered = await inlineRelativeAssets(
+        exportSource.html,
+        exportSource.relPath,
         fileReader,
       );
       // PR #1312 round-2 (lefarcen P2): top-level browser navigation to
@@ -685,6 +796,53 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
     }
   });
 
+}
+
+async function resolveHtmlExportSource({
+  projectId,
+  projectsRoot,
+  relPath,
+  html,
+  metadata,
+  readProjectFile,
+  resolveProjectFilePath,
+}: {
+  projectId: string;
+  projectsRoot: string;
+  relPath: string;
+  html: string;
+  metadata: unknown;
+  readProjectFile: (projectsRoot: string, projectId: string, relPath: string, metadata?: unknown) => Promise<{ buffer: Buffer }>;
+  resolveProjectFilePath: (projectsRoot: string, projectId: string, relPath: string, metadata?: unknown) => Promise<{ size: number; mime: string }>;
+}): Promise<{ html: string; relPath: string }> {
+  if (!isViteDevHtmlEntry(html)) return { html, relPath };
+
+  const ownerDir = nodePath.posix.dirname(relPath);
+  const distRelPath = ownerDir === '.' ? 'dist/index.html' : `${ownerDir}/dist/index.html`;
+  try {
+    const distMeta = await resolveProjectFilePath(projectsRoot, projectId, distRelPath, metadata);
+    if (distMeta.size > MAX_INLINE_OWNER_BYTES || !distMeta.mime.startsWith('text/html')) {
+      return { html, relPath };
+    }
+    const distFile = await readProjectFile(projectsRoot, projectId, distRelPath, metadata);
+    return {
+      html: rewriteViteDistRootAssetUrls(distFile.buffer.toString('utf8')),
+      relPath: distRelPath,
+    };
+  } catch {
+    return { html, relPath };
+  }
+}
+
+function isViteDevHtmlEntry(html: string): boolean {
+  return /<script\b[^>]*\btype\s*=\s*["']module["'][^>]*\bsrc\s*=\s*["']\/src\/[^"']+["'][^>]*>\s*<\/script>/i.test(html);
+}
+
+function rewriteViteDistRootAssetUrls(html: string): string {
+  return html.replace(
+    /\b(href|src)\s*=\s*(["'])\/assets\//gi,
+    (_match, attr: string, quote: string) => `${attr}=${quote}assets/`,
+  );
 }
 
 function buildProjectExportManifestResponse({
@@ -769,7 +927,7 @@ function buildProjectExportManifestResponse({
   note(entryFile, 'project-entry-file');
 
   return {
-    schema: 'open-design.project-export-manifest.v1',
+    schema: PROJECT_EXPORT_MANIFEST_SCHEMA,
     projectId,
     projectName: typeof project?.name === 'string' ? project.name : null,
     generatedAt: new Date().toISOString(),
@@ -875,7 +1033,7 @@ export function registerFinalizeRoutes(app: Express, ctx: RegisterFinalizeRoutes
     redactSecrets,
   } = ctx.finalize;
   app.post('/api/projects/:id/finalize/:provider', async (req, res) => {
-    const { apiKey, baseUrl, model, maxTokens, apiVersion, protocol: bodyProtocol } = req.body || {};
+    const { apiKey, baseUrl, model, maxTokens, apiVersion, protocol: bodyProtocol, reasoningExecution } = req.body || {};
     try {
       // Centralized path-traversal guard. `isSafeId` (apps/daemon/src/projects.ts)
       // rejects pure-dot ids (`.`, `..`, etc.) which would otherwise pass
@@ -925,6 +1083,14 @@ export function registerFinalizeRoutes(app: Express, ctx: RegisterFinalizeRoutes
           validated.error,
         );
       }
+      const reasoningDenial = authorizeReasoningEgress({
+        policy: reasoningExecution,
+        routeKind: 'finalize',
+        provider: protocol,
+        resolvedBaseUrl: effectiveBaseUrl,
+        model,
+      });
+      if (reasoningDenial) return sendReasoningEgressDenial(res, reasoningDenial);
       if (maxTokens !== undefined && (typeof maxTokens !== 'number' || maxTokens <= 0)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'maxTokens must be a positive number when provided');
       }

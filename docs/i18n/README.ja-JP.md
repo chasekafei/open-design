@@ -1,8 +1,10 @@
 <h1 align="center">Open Design: オープンソースの Claude Design 代替ツール</h1>
 
-> 🔥 **Open Design 0.9.0 が登場——セットアップなしで創作を。** [公式 Model Router](https://open-design.ai/amr) がアプリに直接組み込まれました。追加設定も、インストールする CLI も、用意する API キーも不要。アプリを開いてサインインするだけで、すぐにデザインと創作を始められます。[0.9.0 をダウンロード](https://github.com/nexu-io/open-design/releases) · [ディスカッションに参加](https://github.com/nexu-io/open-design/discussions/3524)
+> 🔥 **Open Design 0.10.0 が登場——オールインワンの Agentic デザインワークスペース。** デザインの全工程が、ひとつのウィンドウに。曖昧なアイデアから、リファレンス探し、素材集め、インタラクティブな編集、コメントのキュー投入、モーションの仕上げ、そしてエディタや Code Agent への受け渡しまで——アプリを離れることなく完結します。複数セッションの並行実行で、それはもはや一人のアシスタントではなく、あなたのために働くローカルなデザインチームです。[0.10.0 をダウンロード](https://github.com/nexu-io/open-design/releases) · [ディスカッションに参加](https://github.com/nexu-io/open-design/discussions/4153)
 >
-> 🏅 **Open Design Fellow プログラムの募集を開始しました。** あなたもデザインはオープンであるべきだと信じるなら——Open Design Fellow となり、コアチームとともにプロダクトを形づくり、より多くの人がデザインの未来を定義することに参加できるよう手助けしてください。詳細 → [`MAINTAINERS.md`](../../MAINTAINERS.md) と [Discord](https://discord.gg/qhbcCH8Am4)。
+> ⚡ **Open Design AMR（Agentic Model Router）——公式モデルサービス。** 一度のチャージで、Open Design の中で GPT、Claude、Gemini、DeepSeek をそのまま利用可能。20+ のフラッグシップモデル、設定ゼロ、実トークン使用量ベースの課金。[AMR を試す](https://open-design.ai/amr/)
+>
+> 🏅 **Open Design Fellow プログラムの募集を開始しました。** あなたもデザインはオープンであるべきだと信じるなら——Open Design Fellow となり、コアチームとともにプロダクトを形づくり、より多くの人がデザインの未来を定義することに参加できるよう手助けしてください。詳細 → [`MAINTAINERS.md`](../../MAINTAINERS.md) と [Discord](https://discord.gg/9ptkbbqRu)。
 
 <p align="center">
   <img src="https://repo-assets.open-design.ai/resources/images/hero.png" alt="Open Design — The open-source Claude Design alternative · 150 Design Systems · 261 Plugins · 21 Coding Agents · 14 Media Providers" width="100%" />
@@ -11,14 +13,15 @@
 <p align="center">
   <a href="https://open-design.ai/">ウェブサイト</a> ·
   <a href="https://open-design.ai/">ダウンロード</a> ·
-  <a href="https://discord.gg/qhbcCH8Am4">Discord</a> ·
-  <a href="https://x.com/nexudotio">@nexudotio をフォロー</a>
+  <a href="https://open-design.ai/amr/">Model Router</a> ·
+  <a href="https://discord.gg/9ptkbbqRu">Discord</a> ·
+  <a href="https://x.com/OpenDesignHQ">@OpenDesignHQ をフォロー</a>
 </p>
 
 <p align="center">
   <a href="https://github.com/nexu-io/open-design/releases"><img alt="release" src="https://img.shields.io/github/v/release/nexu-io/open-design?style=flat&color=blueviolet&label=release&include_prereleases&display_name=tag" /></a>
   <a href="../../LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat" /></a>
-  <a href="https://discord.gg/qhbcCH8Am4"><img alt="discord" src="https://img.shields.io/discord/1479002485040480266?style=flat&logo=discord&logoColor=white&label=discord&color=5865F2&cacheSeconds=3600" /></a>
+  <a href="https://discord.gg/9ptkbbqRu"><img alt="discord" src="https://img.shields.io/discord/1479002485040480266?style=flat&logo=discord&logoColor=white&label=discord&color=5865F2&cacheSeconds=3600" /></a>
   <a href="QUICKSTART.ja-JP.md"><img alt="quickstart" src="https://img.shields.io/badge/quickstart-3%20commands-green?style=flat" /></a>
 </p>
 
@@ -116,13 +119,13 @@ Open Design が何であり、何ができるのかを手早く見ていきま�
 | [Cursor](https://www.cursor.com/cli) | ✅ 対応済み | `od mcp install cursor` |
 | [VS Code + GitHub Copilot](https://github.com/features/copilot) | ✅ 対応済み | `od mcp install copilot` |
 | [GitHub Copilot CLI](https://github.com/features/copilot/cli) | ✅ 対応済み | `od mcp install copilot` |
-| Gemini CLI | ✅ 対応済み | `od mcp install gemini` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | ✅ 対応済み | `od mcp install gemini` |
 | [OpenCode](https://opencode.ai/) | ✅ 対応済み | `od mcp install opencode` |
 | [OpenClaw](https://github.com/openclaw/openclaw) | ✅ 対応済み | `od mcp install openclaw` |
 | [Antigravity](https://antigravity.google) | ✅ 対応済み | `od mcp install antigravity` |
 | [Cline](https://github.com/cline/cline) | ✅ 対応済み | `od mcp install cline` |
 | [Trae](https://www.trae.ai/) | ✅ 対応済み | `od mcp install trae` |
-| Kimi CLI | ✅ 対応済み | `od mcp install kimi` |
+| [Kimi CLI](https://github.com/MoonshotAI/kimi-cli) | ✅ 対応済み | `od mcp install kimi` |
 | [Pi Agent](https://github.com/badlogic/pi-mono) | ✅ 対応済み | `od mcp install pi` |
 | [Mistral Vibe CLI](https://github.com/mistralai/mistral-vibe) | ✅ 対応済み | `od mcp install vibe` |
 | [Hermes Agent](https://github.com/nousresearch/hermes-agent) | ✅ 対応済み | `od mcp install hermes` |
@@ -261,7 +264,7 @@ Open Design (OD) はそのオープンソースの代替ツールです。同じ
 
 - 🤖 **エージェントネイティブ、モデル非依存。** 私たちはエージェントを同梱しません。すでにあなたの `PATH` にある `claude` / `codex` / `cursor-agent` / `copilot` / `hermes` / `kimi` がデザインエンジンです。ワンクリックで差し替えられます。
 - 🧠 **デフォルトでブランドグレード。** すべてのレンダリングはアクティブな `DESIGN.md` を読み取ります——パレット、タイポグラフィ、スペーシング、モーション、ボイス、アンチパターンをカバーする 9 セクションのスキーマです。150 のシステムがリポジトリに同梱されています（Linear、Stripe、Vercel、Airbnb、Apple、Tesla、Notion、Anthropic、Cursor、Supabase、Figma…）。フォルダをドロップすれば、ピッカーがそれを見つけます。
-- 🖥️ **ローカルファースト、あらゆるレイヤーで BYOK。** macOS（Apple Silicon + Intel）と Windows（x64）向けのネイティブデスクトップアプリ。Linux AppImage はオプションのリリースレーンで提供。SQLite は `.od/app.sqlite`、ファイルは `.od/projects/<id>/` に置かれ、テレメトリもクラウドへの往復もありません。
+- 🖥️ **ローカルファースト、あらゆるレイヤーで BYOK。** ネイティブデスクトップアプリはクラウドへの往復なしにローカルファーストのままです。デーモンデータパスを説明する前に、ルートの `AGENTS.md` にある **Daemon data directory contract** を必ず読んでください。
 - 🌍 **3 つの平面で組み合わせ可能。** **プラグイン**は実行可能なワークフローを運び · **スキル**はエージェントのデザインの審美眼を運び · **デザインシステム**はブランドを運びます。これら 3 つはすべて、誰もが作成・バージョン管理・公開できるプレーンファイルです。
 - 🔁 **既存のコードベースをリフレッシュ。** `git` リポジトリ + `DESIGN.md` をエージェントに渡せば、あなたの実際のコンポーネントをブランド仕様にリファクタリングします。専用のプラグインが Figma / Pencil のワークフローを React / Next.js / Vue のコードへと移行します。
 - 🔒 **信念としてのプライバシー。** すべてがあなたのデータのある場所——あなたのラップトップ、チームのサーバー、Vercel プロジェクト——で動作します。ネットワークが必要なときも、BYOK プロキシは SSRF からガードされています。
@@ -299,7 +302,7 @@ GUI を一度も開くことなく Open Design を使えます——Claude Code�
 
 ```bash
 # One-line install into the agent you're using:
-curl -fsSL https://open-design.ai/install.sh | sh -s <agent>
+od mcp install <agent>
 # <agent> = claude | codex | cursor | copilot | openclaw | antigravity | gemini
 #         | pi | vibe | hermes | cline | kimi | trae | opencode
 ```
@@ -322,6 +325,12 @@ echo "OD_API_TOKEN=$(openssl rand -hex 32)" >> .env
 docker compose up -d
 # open http://localhost:7456
 ```
+
+### 🚀 Sealos にデプロイ
+
+[![Deploy on Sealos](https://sealos.io/Deploy-on-Sealos.svg)](https://sealos.io/products/app-store/open-design/)
+
+Sealos App Store テンプレートは、公開済みの Open Design Docker イメージを永続的なワークスペースストレージと公開プロキシの Basic Auth 付きで実行します。独自の公開または共有 Docker デプロイでは、[`deploy/README.md`](../../deploy/README.md#local-compose) のリバースプロキシと `OPEN_DESIGN_ALLOWED_ORIGINS` の手順に従ってください。
 
 ### 🧑‍💻 ソースから実行
 
@@ -352,7 +361,7 @@ Open Design は **stdio MCP サーバー**とエージェントごとの**イン
 
 ```bash
 # One-line install (16+ CLIs supported):
-curl -fsSL https://open-design.ai/install.sh | sh -s <agent>
+od mcp install <agent>
 
 # Then the agent can:
 od search-files "primary button"      # search files across projects
@@ -533,7 +542,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
    │  /api/import/claude-design      │
    │  MCP stdio server                │
    └─────────┬───────────────────────┘
-             │ spawn(cli, [...], { cwd: .od/projects/<id> })
+             │ spawn(cli, [...], { cwd: managed project cwd })
              ▼
    ┌──────────────────────────────────────────────────────────────────┐
    │  claude · codex · cursor-agent · copilot · openclaw · antigravity ·│
@@ -547,7 +556,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 |---|---|
 | フロントエンド | Next.js 16 App Router + React 18 + TypeScript |
 | デーモン | Node 24 · Express · SSE ストリーミング · `better-sqlite3` |
-| ストレージ | ファイルは `.od/projects/<id>/` + SQLite は `.od/app.sqlite` + `media-config.json`（gitignore 対象、自動作成）。`OD_DATA_DIR` ですべてを再配置できます。 |
+| ストレージ | デーモンのストレージパスを変更または文書化する前に、ルートの `AGENTS.md` にある **Daemon data directory contract** を必ず読んでください。この README でそれを繰り返してはいけません。 |
 | プレビュー | サンドボックス化された `srcdoc` iframe + ストリーミング `<artifact>` パーサー |
 | エクスポート | HTML（インライン化） · PDF（ブラウザ印刷） · PPTX（エージェント駆動） · ZIP · Markdown · MP4（HyperFrames） |
 | デスクトップ | Electron シェル + サンドボックス化されたレンダラー + サイドカー IPC（STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN） |
@@ -585,8 +594,8 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 
 すべてのチャネルの裏側には、本物の人がいます。
 
-- 💬 **Discord** — 日々のチャット、プラグインの共有、質問 → [**discord.gg/qhbcCH8Am4**](https://discord.gg/qhbcCH8Am4)
-- 🐦 **X / Twitter** — リリースノート、マイルストーン、舞台裏 → [**@nexudotio**](https://x.com/nexudotio)
+- 💬 **Discord** — 日々のチャット、プラグインの共有、質問 → [**discord.gg/9ptkbbqRu**](https://discord.gg/9ptkbbqRu)
+- 🐦 **X / Twitter** — リリースノート、マイルストーン、舞台裏 → [**@OpenDesignHQ**](https://x.com/OpenDesignHQ)
 - 🗣️ **GitHub Discussions** — 深い Q&A、RFC、「成果を見せて」 → [**Discussions**](https://github.com/nexu-io/open-design/discussions)
 - 🐛 **GitHub Issues** — バグ報告、機能リクエスト → [**Issues**](https://github.com/nexu-io/open-design/issues)
 
@@ -635,7 +644,7 @@ gh pr create --fill
 
 ### 🏅 Open Design Fellow プログラム
 
-私たちは世界中で **Open Design Fellow** を募集しています——Fellow はコアチームとともにプロダクトを形づくり、各地域で Open Design を公式に代表し、資金面のサポート（$1,000 / MR）、無料の LLM クレジット、直通のレビュートラックに支えられながら、ローカルでコミュニティを育てます。詳細 → [`MAINTAINERS.md`](../../MAINTAINERS.md) と [Discord](https://discord.gg/qhbcCH8Am4) のアナウンス。
+私たちは世界中で **Open Design Fellow** を募集しています——Fellow はコアチームとともにプロダクトを形づくり、各地域で Open Design を公式に代表し、資金面のサポート（$1,000 / MR）、無料の LLM クレジット、直通のレビュートラックに支えられながら、ローカルでコミュニティを育てます。詳細 → [`MAINTAINERS.md`](../../MAINTAINERS.md) と [Discord](https://discord.gg/9ptkbbqRu) のアナウンス。
 
 ---
 
@@ -669,7 +678,7 @@ gh pr create --fill
 参加してくださったすべての方に感謝します——コード、ドキュメント、フィードバック、鋭い issue、新しいスキル、新しいデザインシステム。
 
 <a href="https://github.com/nexu-io/open-design/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=nexu-io/open-design&max=500&columns=20&anon=1&cache_bust=2026-05-30" alt="Open Design contributors" />
+  <img src="https://contrib.rocks/image?repo=nexu-io/open-design&max=500&columns=20&anon=1&cache_bust=2026-06-29" alt="Open Design contributors" />
 </a>
 
 ---
@@ -694,9 +703,9 @@ gh pr create --fill
 
 <a href="https://star-history.com/#nexu-io/open-design&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&theme=dark&cache_bust=2026-05-28" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-05-28" />
-    <img alt="Open Design star history" src="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-05-28" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&theme=dark&cache_bust=2026-06-29" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-06-29" />
+    <img alt="Open Design star history" src="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-06-29" />
   </picture>
 </a>
 

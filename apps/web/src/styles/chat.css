@@ -23,7 +23,7 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -67,7 +67,7 @@
      No negative margin — the parent clips overflow, which would shave the
      left edge of the focus ring. */
   padding: 1px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   outline: none;
   caret-color: var(--accent);
   transition: background 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -112,7 +112,7 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
@@ -163,7 +163,7 @@
   border: none;
   background: transparent;
   color: var(--text-faint);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -183,7 +183,7 @@
   height: 28px;
   padding: 3px 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--text);
   font-size: 13px;
@@ -200,7 +200,7 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
@@ -220,17 +220,6 @@
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text-muted) 18%, transparent) transparent;
 }
-/* Bottom-anchor the transcript so a short conversation (e.g. a fresh fork)
-   rests against the composer instead of stranding its messages at the top with
-   a large blank area below. The auto top margin absorbs the free space above
-   the first row when the content is shorter than the viewport; once the content
-   outgrows the viewport the auto margin resolves to 0 and the log scrolls
-   normally with the top fully reachable (unlike `justify-content: flex-end`,
-   which clips overflowing content above the scroll range). The empty/loading
-   states own their own vertical layout, so they're excluded. */
-.chat-log > :first-child:not(.chat-empty-wrap):not(.chat-loading-state) {
-  margin-top: auto;
-}
 .chat-log::-webkit-scrollbar {
   width: 8px;
 }
@@ -240,13 +229,16 @@
 }
 .chat-log::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--text-muted) 18%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius);
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 .chat-log:hover::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--text-muted) 28%, transparent);
   background-clip: padding-box;
+}
+.chat-log.is-balanced-transcript > .msg:first-of-type {
+  margin-top: auto;
 }
 
 /* Anchor-to-top tail spacer. Height is driven imperatively by ChatPane; the
@@ -279,7 +271,7 @@
 .chat-loading-mark span {
   width: 6px;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
   opacity: 0.32;
   animation: chat-loading-dot 900ms cubic-bezier(0.23, 1, 0.32, 1) infinite;
@@ -298,7 +290,7 @@
 }
 .chat-loading-lines span {
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--text-muted) 10%, transparent),
@@ -382,17 +374,12 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.msg.user .role::before { content: ''; }
-.msg.user .role {
-  justify-content: flex-end;
-  color: var(--text-muted);
-}
 .msg.user .user-text {
   white-space: pre-wrap;
   color: var(--text);
   background: var(--bg-fill-tertiary);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 8px 12px;
   line-height: 1.5;
   font-size: 14.5px;
@@ -417,7 +404,7 @@
   height: 18px;
   flex: 0 0 auto;
   padding: 1px 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
   background: color-mix(in srgb, var(--accent-tint) 72%, var(--bg));
   color: color-mix(in srgb, var(--accent) 72%, var(--text-strong));
@@ -452,7 +439,7 @@
   gap: 8px;
   margin: 4px 0 6px;
   padding: 4px 10px 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-fill-tertiary);
   border: none;
   font-size: 11.5px;
@@ -563,7 +550,7 @@
   height: 18px;
   max-width: 190px;
   overflow: hidden;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   font-size: 9px;
   line-height: 12px;
 }
@@ -613,7 +600,7 @@
   gap: 7px;
   padding: 6px 10px;
   border: 1px solid color-mix(in srgb, var(--text-muted) 16%, var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--bg-panel) 92%, var(--bg-subtle));
   box-shadow: none;
   color: var(--text-muted);
@@ -632,7 +619,7 @@
 .msg.assistant .op-waiting-detail {
   max-width: 180px;
   padding: 1px 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--text) 5%, var(--bg-subtle));
   overflow: hidden;
   text-overflow: ellipsis;
@@ -660,7 +647,7 @@
 .user-status-card__icon {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -692,28 +679,21 @@
   margin-top: 4px;
   min-height: 20px;
   opacity: 0;
-  transition: opacity 140ms ease;
+  transition: opacity 140ms var(--ease-out);
 }
 .msg.user .user-text-wrap:hover .user-actions,
 .msg.user .user-text-wrap:focus-within .user-actions {
   opacity: 1;
 }
-.msg.user .user-actions-time {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
 .msg.user .user-copy-btn {
   padding: 4px;
   border: none;
   background: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-soft);
   cursor: pointer;
   display: inline-flex;
-  transition: color 120ms ease, background 120ms ease;
+  transition: color 120ms var(--ease-out), background 120ms var(--ease-out);
 }
 .msg.user .user-copy-btn:hover {
   color: var(--text);
@@ -736,41 +716,171 @@
   font-size: 11px;
   background: var(--accent);
   color: white;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
-/* Run-failure error card. Neutral gray (not red): the actionable next step
-   lives in the AMR card below it; this card just states what happened. */
-.msg.error {
-  border: none;
-  background: var(--bg-fill-tertiary);
-  color: var(--text-muted);
-  padding: 10px 12px;
-  border-radius: 8px;
+/* =====================================================================
+   Unified run-failure card  ·  .run-error
+   One shell for every task failure. Neutral surface; the failure is
+   signalled by a semantic status dot + a strong title, NOT a flooded red
+   background (keeps a column of failed turns calm). Four-part structure:
+   ① type title  ② detail message  ③ 1–2 fix CTAs  ④ collapsible source.
+   data-tone re-tints only the status dot (error / warn / brand).
+   ===================================================================== */
+.run-error {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  gap: 12px;
+  animation: run-error-in 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-.chat-error-text { min-width: 0; }
-.chat-error-actions {
+@keyframes run-error-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.99); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ① + ② — status dot, title, detail */
+.run-error__main { display: flex; gap: 11px; align-items: flex-start; }
+.run-error__icon {
   flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  color: var(--red);
+}
+.run-error__icon svg { width: 13px; height: 13px; }
+.run-error[data-tone='warn'] .run-error__icon {
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  color: var(--amber);
+}
+.run-error[data-tone='brand'] .run-error__icon {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.run-error__copy { min-width: 0; flex: 1 1 auto; }
+.run-error__title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-strong);
+}
+.run-error__desc {
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 64ch;
+  overflow-wrap: anywhere;
+}
+
+/* ④ — collapsible error source (code-line styled, one line when collapsed) */
+.run-error__source {
+  border: 1px solid var(--border-soft);
+  background: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+/* Head row: the expand toggle (flex-grows) + a trailing copy button. They are
+   siblings, not nested — a button cannot contain another button. */
+.run-error__source-head {
+  display: flex;
+  align-items: stretch;
+}
+.run-error__source-bar {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  padding: 7px 10px;
+  color: var(--text-soft);
 }
-.chat-error-copy {
-  width: 28px;
-  height: 28px;
-  padding: 0;
+/* Copy diagnostics — sits at the right edge of the source head row. */
+.run-error__source-copy {
+  flex: 0 0 auto;
+  appearance: none;
+  border: 0;
+  background: none;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 34px;
+  color: var(--text-soft);
+  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), color 140ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-.chat-error-retry {
+.run-error__source-copy:hover {
+  background: var(--bg-fill-tertiary);
+  color: var(--text);
+}
+.run-error__source-chevron {
   flex: 0 0 auto;
-  padding: 4px 10px;
+  width: 12px;
+  height: 12px;
+  color: var(--text-faint);
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-/* Contextual primary action in the gray error card (Authorize & retry / Top up). */
+.run-error__source.is-open .run-error__source-chevron { transform: rotate(90deg); }
+.run-error__source-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.run-error__source-peek {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.run-error__source.is-open .run-error__source-peek { opacity: 0; }
+/* max-height accordion (robust where grid-rows:0fr leaks the first child line) */
+.run-error__source-full {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.run-error__source.is-open .run-error__source-full { max-height: 240px; }
+.run-error__source-full > pre {
+  margin: 0;
+  overflow: auto;
+  max-height: 220px;
+  padding: 4px 10px 10px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ③ — fix actions, anchored to the bottom-right of the card */
+.run-error__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* Primary contextual CTA (Authorize & retry / Top up / terminal launch). */
 .chat-error-action {
   flex: 0 0 auto;
   appearance: none;
@@ -779,23 +889,92 @@
   background: var(--accent);
   color: white;
   font: inherit;
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 4px 12px;
+  padding: 6px 14px;
   border-radius: var(--radius-sm);
   transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-.chat-error-action:hover {
-  background: var(--accent-hover, var(--accent));
+.chat-error-action:hover { background: var(--accent-hover, var(--accent)); }
+/* Secondary recovery (Retry / Continue) — ghost. */
+.chat-error-retry {
+  flex: 0 0 auto;
+  padding: 6px 14px;
 }
 
-/* AMR guidance card under the gray error card. Theme-color tinted; two
-   content variants (switch / recharge) share the shell. */
+/* Inline AMR sign-in inside the unified card. The pill's base layout is scoped
+   to Settings/onboarding, so it arrives unstyled here — give it its own full
+   row, wrap the long device-auth error, and match the accent CTA. */
+.chat-error-amr-login {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.chat-error-amr-login .amr-account-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.chat-error-amr-login .amr-account-control__status {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.chat-error-amr-login .amr-account-control__error {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+  color: var(--danger-text, #991b1b);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+/* Sign-in / authorize CTA — solid accent, matching .chat-error-action. */
+.chat-error-amr-login .amr-account-control--signed-out .amr-account-control__action,
+.chat-error-amr-login .amr-account-control--error .amr-account-control__action {
+  appearance: none;
+  cursor: pointer;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  font: inherit;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.chat-error-amr-login .amr-account-control--signed-out .amr-account-control__action:hover,
+.chat-error-amr-login .amr-account-control--error .amr-account-control__action:hover {
+  background: var(--accent-hover, var(--accent));
+}
+/* Cancel during signing-in stays subtle — the activation block below carries
+   the primary accent CTA (Open sign-in page). */
+.chat-error-amr-login .amr-account-control--signing-in .amr-account-control__action {
+  appearance: none;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-error { animation: none; }
+  .run-error__source-full,
+  .run-error__source-chevron { transition: none; }
+}
+
+/* AMR guidance card under the unified run-error card. Shares the same shell
+   (1px border + elevated surface + radius-md) so the two stack as one visual
+   system; the accent dot/chips carry the brand tint. */
 .amr-card {
   margin-top: 8px;
-  padding: 12px 14px;
-  border: none;
-  background: var(--bg-fill-tertiary);
-  border-radius: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -837,7 +1016,7 @@
   font-size: 11px;
   line-height: 1.4;
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--accent);
   border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
@@ -904,38 +1083,51 @@
   position: fixed;
   z-index: 45;
   pointer-events: none;
-  contain: layout style paint;
+  /* `contain: paint` would clip the composer "+" menu, which pops UP and out of
+     this fixed layer's box — the overflow got cut and revealed the chat log
+     behind it. Keep layout/style containment but drop paint so the menu draws
+     fully above the transcript. */
+  contain: layout style;
   transform: translateZ(0);
 }
 .chat-composer-fixed-layer .composer {
   pointer-events: auto;
 }
-/* Elevation kicks in only when a pinned todo card is sitting directly
- * above the composer. Without the card the chat scroll already provides
- * its own visual edge; the shadow would just darken empty whitespace. */
-.chat-pinned-todo + .composer {
-  box-shadow: 0 -10px 22px -10px rgba(0, 0, 0, 0.22);
-}
-/* Dark mode: the same alpha disappears against the dark panel, so push
- * it harder and let it spread a bit further. */
-[data-theme="dark"] .chat-pinned-todo + .composer {
-  box-shadow: 0 -14px 28px -12px rgba(0, 0, 0, 0.65);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .chat-pinned-todo + .composer {
-    box-shadow: 0 -14px 28px -12px rgba(0, 0, 0, 0.65);
-  }
-}
 .composer-shell {
+  container-type: inline-size;
   border: 1px solid var(--bg-fill-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--bg-fill-tertiary);
   box-shadow: none;
   padding: 8px 10px 6px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: border-color 120ms ease, background 120ms ease;
+  transition: border-color 120ms var(--ease-out), background 120ms var(--ease-out);
+}
+/* When the chat pane is narrow, compact the footer cluster: tighten the
+   model chip + mode toggle, collapse the mode label, and make send/stop
+   icon-only — so the action buttons never overflow or deform. This @container
+   block is shared by every `.composer-shell` (chat footer, comment composer,
+   …), so the breakpoint stays generic; the fixed-layer footer keeps its side
+   inset via child margins rather than shell padding, leaving this width — and
+   every other composer's collapse behavior — untouched. */
+@container (max-width: 430px) {
+  .composer-row .inline-switcher__chip { padding: 0 7px 0 5px; gap: 5px; }
+  /* Hide ONLY the trigger's label — the popover options share this class
+     and must keep their labels ("Ask" / "Design") visible. */
+  .composer-row .session-mode-toggle__trigger .session-mode-toggle__label { display: none; }
+  .composer-row .session-mode-toggle__trigger { padding: 0 7px; gap: 3px; }
+  /* Right-align the popover so it grows leftward and stays inside the narrow
+     chat pane instead of overflowing past its right edge (where the scroll
+     container clips it). */
+  .composer-row .session-mode-toggle__popover { left: auto; right: 0; }
+  .composer-row .composer-send {
+    width: 32px;
+    padding: 0;
+    gap: 0;
+  }
+  .composer-row .composer-send span { display: none; }
 }
 .composer-shell:focus-within {
   border-color: color-mix(in srgb, var(--accent) 22%, var(--border-strong));
@@ -969,7 +1161,7 @@
   margin: 0 12px;
   padding: 5px 8px;
   border: 1px solid var(--border-soft);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--accent) 7%, var(--bg-panel));
   color: var(--text);
   font-size: 12px;
@@ -1050,6 +1242,36 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: calc(100% - 8px);
+}
+.composer-input-wrap .home-hero__carousel {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  top: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--text-faint);
+  font-size: 13.5px;
+  line-height: 1.6;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.composer-input-wrap .home-hero__carousel-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.composer-input-wrap .home-hero__carousel-caret {
+  width: 1px;
+  height: 1.25em;
+  flex: 0 0 auto;
+  background: var(--accent);
+  opacity: 0.85;
+  animation: home-hero-carousel-caret 900ms steps(1) infinite;
 }
 /* Single-paragraph + LineBreakNode model: collapse paragraph margins so a
    serialized "\n" reads as a single visual line break (no \n\n gap). */
@@ -1136,13 +1358,77 @@
 .composer-inline-mention--file       { --m-hue: var(--blue);    --m-tint: var(--blue-bg); }
 .composer-inline-mention--connector  { --m-hue: var(--green);   --m-tint: var(--green-bg); }
 .composer-inline-mention--asset      { --m-hue: var(--text-soft); --m-tint: var(--bg-subtle); }
+/* Working-directory picker row, directly below the input and above the
+   controls — mirrors the Home composer's placement. */
+.composer-workdir-row {
+  display: flex;
+  justify-content: flex-start;
+  /* Hug the composer card so the picker sits ~5px below it (to the icon),
+     matching the Home placement. Tuned against the inline composer's 8px
+     column gap (8 - 4 = ~4px). */
+  margin-top: -4px;
+}
+/* In the portaled fixed-layer composer the column gap is only 5px (vs 8px
+   inline — see `.chat-composer-fixed-layer .composer` in viewer/routines.css),
+   so the -4px hug above collapses the picker to ~1px below the card — almost
+   touching it. Reset the negative margin there so the picker keeps a clean
+   ~5px gap from the input card, matching the Home composer's breathing room. */
+.chat-composer-fixed-layer .composer-workdir-row {
+  margin-top: 0;
+}
 .composer-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-top: 6px;
-  margin-top: 2px;
+  /* Center the divider between the input above (8px composer gap) and the
+     controls below (8px padding) so the toolbar isn't cramped against the
+     border. */
+  margin-top: 0;
+  padding-top: 8px;
   border-top: 1px solid var(--border-soft);
+  /* Anchors the standalone design-toolbox popover (opened from the assistant
+     next-step card) above this toolbar row. */
+  position: relative;
+}
+
+/* Standalone design-toolbox popover. The toolbox left the "+" menu; it now
+   opens here, floating above the composer toolbar, triggered from the
+   assistant "next step" card's "More" affordance. `display: contents` keeps
+   the wrapper out of the flex flow so the backdrop + popup anchor cleanly. */
+.composer-toolbox-standalone {
+  display: contents;
+}
+.composer-toolbox-standalone-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 89;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: default;
+}
+.composer-row .composer-toolbox-standalone-popup {
+  position: absolute;
+  left: 8px;
+  right: auto;
+  top: auto;
+  bottom: calc(100% + 8px);
+  z-index: 90;
+  max-height: min(60vh, 440px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  animation: composer-toolbox-pop-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes composer-toolbox-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 .composer-row .icon-btn {
   box-sizing: border-box;
@@ -1172,12 +1458,55 @@
 .composer-row .icon-btn:active:not(:disabled) { background: var(--bg-muted); }
 .composer-row .icon-btn:disabled { opacity: 0.45; cursor: default; }
 .composer-spacer { flex: 1; }
+
+/* --- Composer footer: one control system ----------------------------------
+   The toolbar mixes five controls authored in five different components —
+   the + icon (.icon-btn), the working-dir pill (.working-dir-pill-trigger),
+   the agent avatar (.avatar-agent-trigger), the "Design" session-mode toggle
+   (.session-mode-toggle__trigger) and Send (.composer-send) — which had
+   drifted to three heights (28/32px) and three corner radii (full-pill / 8 /
+   6). Normalize the interactive controls to one 32px, radius-sm pill so the
+   row reads as a single system. Send keeps its accent fill and + stays a
+   ghost icon; only geometry/elevation is unified, not color. `.app` raises
+   specificity above the per-component base rules in routines/shell.css. */
+.app .composer-row .working-dir-pill-trigger,
+.app .composer-row .avatar-agent-trigger,
+.app .composer-row .session-mode-toggle__trigger,
+.app .composer-row .composer-send,
+.app .composer-row .icon-btn {
+  height: 28px;
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+}
+.app .composer-row .working-dir-pill-trigger {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.app .composer-row .session-mode-toggle__trigger {
+  box-shadow: none;
+}
+/* The agent avatar is a 32px round image; shrink it (and the trigger grid)
+   so it fits the 28px control height without being clipped. */
+.app .composer-row .avatar-agent-trigger {
+  width: 48px;
+  grid-template-columns: 26px 20px;
+}
+.app .composer-row .avatar-btn {
+  width: 22px;
+  height: 22px;
+}
+.app .composer-row .icon-btn {
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+}
 .session-mode-toggle {
   position: relative;
   display: inline-flex;
   align-items: center;
   height: 32px;
   min-width: 0;
+  flex-shrink: 0;
 }
 .session-mode-toggle__trigger,
 .session-mode-toggle__option {
@@ -1204,8 +1533,8 @@
 .session-mode-toggle__trigger {
   height: 32px;
   max-width: 132px;
-  padding: 0 9px;
-  border-radius: 7px;
+  padding: 0 8px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-xs);
 }
 .session-mode-toggle__trigger:hover:not(:disabled),
@@ -1234,7 +1563,7 @@
   min-width: 168px;
   padding: 4px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--bg-panel);
   box-shadow: var(--shadow-md);
 }
@@ -1249,7 +1578,7 @@
   text-align: left;
   padding: 0 8px;
   border-color: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
 }
 .session-mode-toggle__option:hover:not(:disabled) {
@@ -1277,7 +1606,7 @@
 .session-mode-card {
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--bg-panel);
   color: var(--text);
   box-shadow: var(--shadow-md);
@@ -1305,7 +1634,7 @@
   flex: 0 0 24px;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--text-strong);
 }
@@ -1352,7 +1681,7 @@
 .session-mode-card__query {
   padding: 6px 7px;
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg-panel);
   color: var(--text);
   font-size: 11.5px;
@@ -1376,7 +1705,7 @@
 .composer-import {
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 4px 12px;
   font-size: 12px;
   color: var(--text-muted);
@@ -1388,7 +1717,7 @@
   gap: 6px;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 4px 10px;
   font-size: 12px;
   color: var(--text-muted);
@@ -1409,14 +1738,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-width: 64px;
+  gap: 5px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-width: 0;
   height: 32px;
   background: var(--accent);
   border: 1px solid var(--accent);
   color: white;
   font-weight: 650;
-  padding: 0 16px;
+  padding: 0 11px;
   font-size: 12.5px;
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-xs);
@@ -1459,7 +1790,7 @@
   padding: 7px;
   overflow: visible;
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--bg-panel) 92%, var(--bg-subtle));
   box-shadow:
     0 10px 24px -18px rgba(0, 0, 0, 0.32),
@@ -1520,7 +1851,7 @@
   padding: 2px 4px;
   overflow: hidden;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: transparent;
   transition:
     background-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -1548,7 +1879,7 @@
   left: 28px;
   right: 8px;
   height: 2px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--selected);
   box-shadow: 0 0 0 2px var(--selected-soft);
 }
@@ -1597,7 +1928,7 @@
   min-width: 0;
   max-width: 124px;
   padding: 0 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
   background: color-mix(in srgb, var(--bg) 78%, transparent);
   color: var(--text-muted);
@@ -1625,7 +1956,7 @@
   justify-content: center;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
 }
@@ -1683,7 +2014,7 @@
   z-index: 20;
   max-width: 180px;
   padding: 5px 7px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--text-strong) 92%, #000);
   color: var(--bg-panel);
   font-size: 11px;
@@ -1741,7 +2072,7 @@
   padding: 2px 5px 2px 3px;
   background: color-mix(in srgb, var(--bg-panel) 96%, var(--bg-subtle));
   border: 1px solid var(--border-soft);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   max-width: min(190px, 100%);
   overflow: hidden;
   white-space: nowrap;
@@ -1763,7 +2094,7 @@
   width: 14px;
   height: 14px;
   flex: 0 0 14px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--text) 7%, var(--bg-subtle));
   color: var(--text-muted);
   font-size: 8px;
@@ -1785,7 +2116,7 @@
   max-width: 232px;
   padding: 0 7px;
   gap: 5px;
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: 11px;
   box-shadow: none;
 }
@@ -1795,7 +2126,7 @@
   min-height: 22px;
   max-width: min(190px, 100%);
   padding: 2px 5px 2px 3px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 10.5px;
   background: color-mix(in srgb, var(--accent-tint) 30%, var(--bg-panel));
   border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
@@ -1804,7 +2135,7 @@
   width: 14px;
   height: 14px;
   flex-basis: 14px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--accent) 9%, var(--bg-subtle));
   color: var(--accent);
 }
@@ -1820,7 +2151,7 @@
   width: 16px;
   height: 16px;
   flex-basis: 16px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 .staged-context .staged-remove svg {
   width: 8px;
@@ -1841,6 +2172,39 @@
 .staged-context--connector .staged-icon {
   background: color-mix(in srgb, var(--green) 10%, var(--bg-subtle));
   color: var(--green);
+}
+/* Applied-plugin chip — accent-tinted, sitting inline in the staged-context
+   row next to the design-system picker. The chip itself is a plain container;
+   its two controls (open-details + remove) are real sibling buttons. */
+.staged-context--plugin {
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg-panel));
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+}
+.staged-context--plugin .staged-icon {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-subtle));
+  color: var(--accent);
+}
+.staged-context--plugin:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+/* The chip's "open details" trigger: icon + name as a real <button> so it is a
+   sibling of the remove button, not a role=button wrapper around it (nested
+   interactive controls break focus order + assistive-tech announcements).
+   Unstyled so it reads as the chip's content rather than a nested button. */
+.staged-context-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  overflow: hidden;
 }
 .staged-context--workspace {
   background: color-mix(in srgb, var(--bg-subtle) 48%, var(--bg-panel));
@@ -1912,7 +2276,7 @@
   padding: 12px;
   background: var(--bg-panel);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
 }
 .staged-preview-head {
@@ -2037,7 +2401,7 @@
   padding: 4px 8px;
   background: var(--bg-fill-tertiary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 11.5px;
   color: var(--text-muted);
   max-width: 220px;
@@ -2063,7 +2427,7 @@
   padding: 4px 10px 4px 4px;
   background: var(--bg-fill-tertiary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-size: 11.5px;
   max-width: 240px;
   color: var(--text);

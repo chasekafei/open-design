@@ -85,7 +85,7 @@ COPY plugins/_official ./plugins/_official
 
 FROM ${RUNTIME_IMAGE}
 
-RUN apk add --no-cache tini su-exec poppler-utils git && \
+RUN apk add --no-cache tini su-exec poppler-utils bash git && \
     addgroup -S -g 1001 open-design && \
     adduser -S -D -h /home/open-design -u 1001 -G open-design open-design
 

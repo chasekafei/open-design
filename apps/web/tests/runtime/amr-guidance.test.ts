@@ -1,14 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { resolveRunFailureUi } from '../../src/runtime/amr-guidance';
+import { amrRechargeUrlForProfile, resolveRunFailureUi } from '../../src/runtime/amr-guidance';
+
+describe('amrRechargeUrlForProfile', () => {
+  it('matches the selected AMR profile wallet origin', () => {
+    expect(amrRechargeUrlForProfile('prod')).toBe(
+      'https://open-design.ai/amr/wallet?source=open_design',
+    );
+    expect(amrRechargeUrlForProfile('test')).toBe(
+      'https://vela.powerformer.net/wallet?source=open_design',
+    );
+    expect(amrRechargeUrlForProfile('local')).toBe(
+      'http://localhost:5173/wallet?source=open_design',
+    );
+    expect(amrRechargeUrlForProfile(' unknown ')).toBe(
+      'https://open-design.ai/amr/wallet?source=open_design',
+    );
+  });
+});
 
 describe('resolveRunFailureUi', () => {
-  it('promotes AMR (switch card) for non-AMR model/auth/quota errors', () => {
-    for (const code of [
-      'AGENT_AUTH_REQUIRED',
-      'UNAUTHORIZED',
-      'RATE_LIMITED',
-      'UPSTREAM_UNAVAILABLE',
-    ]) {
+  // RATE_LIMITED / UPSTREAM_UNAVAILABLE: promote AMR + plain retry, raw error
+  // copy (no override). The auth codes (AGENT_AUTH_REQUIRED / UNAUTHORIZED) also
+  // promote AMR but carry sign-in copy — covered by a dedicated test below.
+  it('promotes AMR (switch card) for non-AMR model/quota errors', () => {
+    for (const code of ['RATE_LIMITED', 'UPSTREAM_UNAVAILABLE']) {
       const ui = resolveRunFailureUi(code, 'claude');
       expect(ui.showSwitchCard).toBe(true);
       expect(ui.primaryAction).toBe('retry');
@@ -23,14 +38,53 @@ describe('resolveRunFailureUi', () => {
     expect(resolveRunFailureUi('AGENT_UNAVAILABLE', 'codex').showSwitchCard).toBe(false);
   });
 
-  it('offers authorize-and-retry for an unauthorized AMR run (no card)', () => {
+  it('localizes a mid-stream connection drop for any agent, no AMR promotion', () => {
+    for (const agent of ['claude', 'codex', null]) {
+      const ui = resolveRunFailureUi('AGENT_CONNECTION_DROPPED', agent);
+      expect(ui).toMatchObject({
+        primaryAction: 'retry',
+        messageKey: 'chat.connectionDropped',
+        secondaryRetry: false,
+        showSwitchCard: false,
+      });
+    }
+  });
+
+  it('offers authorize-and-retry for an unauthorized AMR run (sign-in copy, no card)', () => {
     const ui = resolveRunFailureUi('AMR_AUTH_REQUIRED', 'amr');
     expect(ui).toMatchObject({
       primaryAction: 'authorize',
-      messageKey: 'chat.amrError.authMessage',
+      titleKey: 'chat.runError.title.signInRequired',
+      // AMR-specific sign-in copy; single CTA, no AMR promotion card.
+      messageKey: 'chat.runError.signInMessage.amr',
       secondaryRetry: false,
       showSwitchCard: false,
     });
+  });
+
+  // PRD "需要登录" — non-AMR agents. Open Design can't sign in for them (their
+  // login lives in the user's own terminal), so the card shows the {agent}
+  // sign-in copy, a plain Retry primary, and promotes AMR via the switch card.
+  it('shows sign-in copy + retry + AMR promotion for non-AMR AGENT_AUTH_REQUIRED / UNAUTHORIZED', () => {
+    for (const code of ['AGENT_AUTH_REQUIRED', 'UNAUTHORIZED']) {
+      for (const agent of ['claude', 'codex', 'cursor-agent', 'deepseek']) {
+        const ui = resolveRunFailureUi(code, agent);
+        expect(ui).toMatchObject({
+          primaryAction: 'retry',
+          titleKey: 'chat.runError.title.signInRequired',
+          messageKey: 'chat.runError.signInMessage.other',
+          secondaryRetry: false,
+          showSwitchCard: true,
+        });
+      }
+    }
+  });
+
+  // AMR's own auth code must NOT fall into the non-AMR sign-in branch.
+  it('does not give an AMR run the non-AMR sign-in copy', () => {
+    expect(resolveRunFailureUi('AMR_AUTH_REQUIRED', 'amr').messageKey).not.toBe(
+      'chat.runError.signInMessage.other',
+    );
   });
 
   it('offers recharge + manual retry for an out-of-balance AMR run', () => {

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AutomationEvolutionProposal,
   AutomationEvolutionProposalListResponse,
+  AutomationsClickProps,
   AutomationTemplate as ContractAutomationTemplate,
   AutomationTemplateListResponse,
   ConnectorDetail,
@@ -357,6 +358,25 @@ function proposalActionLabel(action: AutomationEvolutionProposal['action'], t: T
   return t('automations.proposalActionPromote');
 }
 
+function mergeAutomationProposals(
+  current: AutomationEvolutionProposal[],
+  incoming: AutomationEvolutionProposal[],
+): AutomationEvolutionProposal[] {
+  const merged = new Map(current.map((proposal) => [proposal.id, proposal]));
+  for (const proposal of incoming) {
+    merged.set(proposal.id, proposal);
+  }
+  return Array.from(merged.values()).sort((a, b) => {
+    const bTime = Date.parse(b.createdAt);
+    const aTime = Date.parse(a.createdAt);
+    return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
+  });
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function TasksView({ skills = [], designTemplates = [], connectors = [] }: Props) {
   const t = useT();
   const analytics = useAnalytics();
@@ -368,6 +388,23 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
     pageViewFiredRef.fired = true;
     trackPageView(analytics.track, { page_name: 'automations' });
   }, [analytics.track, pageViewFiredRef]);
+  // P2 ui_click page_name=automations. Fire on every actionable click inside
+  // the tab before running the handler, so navigations that unmount the view
+  // still report.
+  const fireClick = useCallback(
+    (
+      element: AutomationsClickProps['element'],
+      extra?: Pick<AutomationsClickProps, 'type_id' | 'filter_id' | 'template_kind'>,
+    ) => {
+      trackAutomationsClick(analytics.track, {
+        page_name: 'automations',
+        area: 'automations',
+        element,
+        ...extra,
+      });
+    },
+    [analytics.track],
+  );
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -393,7 +430,8 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
     [templates, templateFilter],
   );
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<{ proposalRefreshFailed: boolean }> => {
+    let proposalRefreshFailed = false;
     try {
       const templateRequest = fetch('/api/automation-templates')
         .then(async (res) => {
@@ -403,10 +441,16 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
         .catch(() => null);
       const proposalRequest = fetch('/api/automation-proposals?status=pending-review')
         .then(async (res) => {
-          if (!res.ok) return null;
+          if (!res.ok) {
+            proposalRefreshFailed = true;
+            return null;
+          }
           return (await res.json()) as AutomationEvolutionProposalListResponse;
         })
-        .catch(() => null);
+        .catch(() => {
+          proposalRefreshFailed = true;
+          return null;
+        });
       const [rRes, pRes, tJson, proposalJson] = await Promise.all([
         fetch('/api/routines'),
         fetch('/api/projects'),
@@ -433,10 +477,11 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
       }
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
+    return { proposalRefreshFailed };
   }, []);
 
   useEffect(() => {
@@ -481,7 +526,7 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
       }
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setProposalBusyId(null);
     }
@@ -510,7 +555,7 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
       setExpandedId(id);
       setHistoryTick((tick) => tick + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setBusyId(null);
     }
@@ -527,9 +572,23 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `crystallize failed: ${res.status}`);
       }
-      await refresh();
+      const json = (await res.json()) as RoutineRunCrystallizeResponse;
+      const createdProposals = Array.isArray(json.proposals) ? json.proposals : [];
+      if (createdProposals.length > 0) {
+        setProposals((current) => mergeAutomationProposals(current, createdProposals));
+      }
+      const { proposalRefreshFailed } = await refresh();
+      if (proposalRefreshFailed) {
+        setError(
+          createdProposals.length > 0
+            ? t('automations.crystallizePartialSuccess')
+            : t('automations.crystallizeRefreshFailed'),
+        );
+      } else if (createdProposals.length === 0) {
+        setError(t('automations.crystallizeNoProposals'));
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(t('automations.crystallizeFailed', { error: errorMessage(err) }));
     } finally {
       setCrystallizingRunId(null);
     }
@@ -549,7 +608,7 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
       }
       void refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setBusyId(null);
     }
@@ -568,7 +627,7 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
       if (expandedId === id) setExpandedId(null);
       void refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setBusyId(null);
     }
@@ -595,7 +654,10 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
           <button
             type="button"
             className="automations-view__new"
-            onClick={() => setModal({ kind: 'create' })}
+            onClick={() => {
+              fireClick('new_automation');
+              setModal({ kind: 'create' });
+            }}
             data-testid="automations-new"
           >
             <Icon name="plus" size={14} />
@@ -619,7 +681,10 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
           <button
             type="button"
             className="automation-empty"
-            onClick={() => setModal({ kind: 'create' })}
+            onClick={() => {
+              fireClick('new_automation');
+              setModal({ kind: 'create' });
+            }}
           >
             <span className="automation-empty__icon">
               <Icon name="plus" size={16} />
@@ -672,14 +737,15 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
                           <button
                             type="button"
                             className="automation-inline-link"
-                            onClick={() =>
+                            onClick={() => {
+                              fireClick('open_artifact');
                               navigate({
                                 kind: 'project',
                                 projectId: r.lastRun!.projectId,
                                 conversationId: r.lastRun!.conversationId,
                                 fileName: null,
-                              })
-                            }
+                              });
+                            }}
                           >
                             {t('automations.openResult')}
                           </button>
@@ -691,7 +757,10 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
                     <button
                       type="button"
                       className="automation-row__btn"
-                      onClick={() => runNow(r.id)}
+                      onClick={() => {
+                        fireClick('run_now');
+                        runNow(r.id);
+                      }}
                       disabled={isBusy}
                       title={t('automations.runNowTitle')}
                     >
@@ -702,6 +771,7 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
                       type="button"
                       className="automation-row__btn"
                       onClick={() => {
+                        fireClick('history');
                         setExpandedId(isExpanded ? null : r.id);
                         if (!isExpanded) setHistoryTick((tick) => tick + 1);
                       }}
@@ -713,7 +783,10 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
                     <button
                       type="button"
                       className="automation-row__btn"
-                      onClick={() => setModal({ kind: 'edit', routine: r })}
+                      onClick={() => {
+                        fireClick('edit');
+                        setModal({ kind: 'edit', routine: r });
+                      }}
                       disabled={isBusy}
                     >
                       <Icon name="edit" size={12} />
@@ -722,7 +795,10 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
                     <button
                       type="button"
                       className="automation-row__btn"
-                      onClick={() => togglePaused(r)}
+                      onClick={() => {
+                        fireClick(r.enabled ? 'pause' : 'resume');
+                        togglePaused(r);
+                      }}
                       disabled={isBusy}
                     >
                       {r.enabled ? t('automations.pause') : t('automations.resume')}
@@ -730,7 +806,10 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
                     <button
                       type="button"
                       className="automation-row__btn automation-row__btn--danger"
-                      onClick={() => remove(r.id)}
+                      onClick={() => {
+                        fireClick('delete');
+                        remove(r.id);
+                      }}
                       disabled={isBusy}
                       aria-label={t('automations.deleteAria')}
                       title={t('automations.deleteTitle')}
@@ -744,6 +823,7 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
                       refreshKey={historyTick}
                       crystallizingRunId={crystallizingRunId}
                       onCrystallizeRun={crystallizeRun}
+                      onFireClick={fireClick}
                       t={t}
                     />
                   ) : null}
@@ -798,7 +878,10 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
                     <button
                       type="button"
                       className="automation-row__btn"
-                      onClick={() => reviewProposal(proposal.id, 'apply')}
+                      onClick={() => {
+                        fireClick('proposal_apply');
+                        reviewProposal(proposal.id, 'apply');
+                      }}
                       disabled={isBusy}
                     >
                       <Icon name="check" size={12} />
@@ -807,7 +890,10 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
                     <button
                       type="button"
                       className="automation-row__btn automation-row__btn--danger"
-                      onClick={() => reviewProposal(proposal.id, 'reject')}
+                      onClick={() => {
+                        fireClick('proposal_reject');
+                        reviewProposal(proposal.id, 'reject');
+                      }}
                       disabled={isBusy}
                     >
                       {t('automations.reject')}
@@ -847,7 +933,10 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
                 role="tab"
                 aria-selected={isActive}
                 className={`automations-template-tab${isActive ? ' is-active' : ''}`}
-                onClick={() => setTemplateFilter(filter.id)}
+                onClick={() => {
+                  fireClick('filter_tab', { filter_id: filter.id });
+                  setTemplateFilter(filter.id);
+                }}
               >
                 <span className="automations-template-tab__label">{filter.label}</span>
                 <span className="automations-template-tab__count">{count}</span>
@@ -873,7 +962,10 @@ export function TasksView({ skills = [], designTemplates = [], connectors = [] }
               key={template.id}
               type="button"
               className={`automation-template-card is-${template.kind}`}
-              onClick={() => setModal({ kind: 'create', template })}
+              onClick={() => {
+                fireClick('type_card', { template_kind: template.kind });
+                setModal({ kind: 'create', template });
+              }}
             >
               <span className="automation-template-card__icon" aria-hidden="true">
                 <Icon name={template.icon} size={16} />
@@ -939,12 +1031,14 @@ function AutomationRunHistory({
   refreshKey,
   crystallizingRunId,
   onCrystallizeRun,
+  onFireClick,
   t,
 }: {
   routineId: string;
   refreshKey: number;
   crystallizingRunId: string | null;
   onCrystallizeRun: (routineId: string, runId: string) => void;
+  onFireClick: (element: AutomationsClickProps['element']) => void;
   t: TranslateFn;
 }) {
   const [runs, setRuns] = useState<RoutineRun[] | null>(null);
@@ -1005,7 +1099,10 @@ function AutomationRunHistory({
                 <button
                   type="button"
                   className="automation-history__open"
-                  onClick={() => onCrystallizeRun(routineId, run.id)}
+                  onClick={() => {
+                    onFireClick('crystallize');
+                    onCrystallizeRun(routineId, run.id);
+                  }}
                   disabled={crystallizingRunId === run.id}
                   title={t('automations.crystallizeTitle')}
                 >
@@ -1016,14 +1113,15 @@ function AutomationRunHistory({
               <button
                 type="button"
                 className="automation-history__open"
-                onClick={() =>
+                onClick={() => {
+                  onFireClick('view_progress');
                   navigate({
                     kind: 'project',
                     projectId: run.projectId,
                     conversationId: run.conversationId,
                     fileName: null,
-                  })
-                }
+                  });
+                }}
               >
                 {t('automations.openConversation')}
                 <Icon name="chevron-right" size={12} />

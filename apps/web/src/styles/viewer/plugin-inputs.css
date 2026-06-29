@@ -27,11 +27,11 @@
   justify-content: center;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-faint);
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease,
-    color 120ms ease;
+  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out),
+    color 120ms var(--ease-out);
 }
 .settings-skills .skills-row-actions .icon-btn:hover {
   background: var(--bg-panel);
@@ -48,7 +48,36 @@
 .settings-skills .skills-delete-confirm .btn {
   padding: 4px 10px;
   font-size: 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
+}
+
+.settings-skills .skills-edit-builtin-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 2px 14px 14px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--warning, #d97706) 30%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warning, #d97706) 8%, var(--bg-panel));
+  color: var(--text);
+}
+.settings-skills .skills-edit-builtin-warning p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.settings-skills .skills-edit-builtin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.settings-skills .skills-edit-builtin-actions .btn {
+  min-height: 30px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
 }
 
 .settings-skills .skills-row-detail {
@@ -79,7 +108,7 @@
   overflow: auto;
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   font-size: 12.5px;
   line-height: 1.55;
@@ -94,7 +123,7 @@
   max-height: 240px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 8px 10px;
 }
 .settings-skills .skills-file-entry {
@@ -172,9 +201,9 @@
   cursor: pointer;
 
   transition:
-    color 120ms ease,
-    background 120ms ease,
-    box-shadow 120ms ease;
+    color 120ms var(--ease-out),
+    background 120ms var(--ease-out),
+    box-shadow 120ms var(--ease-out);
 }
 
 .mcp-json-helper-toggle:hover {
@@ -313,7 +342,7 @@
 	align-items: center;
 	justify-content: center;
 
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 
 	background: var(--accent-tint);
 

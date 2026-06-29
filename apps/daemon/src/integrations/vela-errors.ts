@@ -7,7 +7,10 @@ export interface AmrAccountFailure {
   actionUrl?: string;
 }
 
-export const DEFAULT_AMR_RECHARGE_URL = 'https://open-design.ai/amr/wallet';
+// `source=open_design` tags the wallet landing page_view so vela analytics can
+// attribute the recharge visit to Open Design.
+export const DEFAULT_AMR_RECHARGE_URL =
+  'https://open-design.ai/amr/wallet?source=open_design';
 
 const AMR_AUTH_REQUIRED_MESSAGE =
   'AMR sign-in is required. Sign in to AMR Cloud again, then retry this run.';
@@ -31,7 +34,12 @@ function containsInsufficientBalanceSignal(value: string): boolean {
     value.includes('not enough credits') ||
     value.includes('balance is empty') ||
     value.includes('balance too low') ||
-    value.includes('billing balance')
+    value.includes('billing balance') ||
+    // vela returns the pre-charge (额度预扣) failure in Chinese when the wallet
+    // cannot cover a model call; this currently leaks into execution_failed.
+    value.includes('预扣费额度失败') ||
+    value.includes('余额不足') ||
+    value.includes('额度不足')
   ) {
     return true;
   }

@@ -1,24 +1,42 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { basename } from "node:path";
 
-type UpdaterFixtureChannel = "stable" | "beta" | "nightly" | "preview";
+import {
+  isReleaseChannel,
+  releaseMetadataVersionFields,
+  type ReleaseChannel,
+} from "@open-design/release";
+
+type UpdaterFixtureChannel = ReleaseChannel;
 
 export type UpdaterFixtureOptions = {
   artifactBody?: Buffer | string;
+  artifactPath?: string;
   channel?: UpdaterFixtureChannel;
   host?: string;
+  includePayload?: boolean;
   platform?: "mac" | "win";
+  payloadBody?: Buffer | string;
+  payloadPath?: string;
   port?: number;
   version?: string;
 };
 
 export type UpdaterFixtureInfo = {
+  artifactPath: string | null;
   artifactUrl: string;
   channel: UpdaterFixtureChannel;
   checksumUrl: string;
   metadataUrl: string;
   origin: string;
+  payloadChecksumUrl: string | null;
+  payloadPath: string | null;
+  payloadSha256: string | null;
+  payloadUrl: string | null;
   platform: "mac" | "win";
   sha256: string;
   version: string;
@@ -39,6 +57,19 @@ function listen(server: Server, port: number, host: string): Promise<void> {
   });
 }
 
+async function sha256File(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  await new Promise<void>((resolveHash, rejectHash) => {
+    const stream = createReadStream(path);
+    stream.on("data", (chunk) => {
+      hash.update(chunk);
+    });
+    stream.on("error", rejectHash);
+    stream.on("end", resolveHash);
+  });
+  return hash.digest("hex");
+}
+
 function close(server: Server): Promise<void> {
   return new Promise<void>((resolveClose, rejectClose) => {
     server.close((error) => (error == null ? resolveClose() : rejectClose(error)));
@@ -49,18 +80,6 @@ function serverOrigin(server: Server): string {
   const address = server.address();
   if (address == null || typeof address === "string") throw new Error("updater fixture did not listen on TCP");
   return `http://127.0.0.1:${address.port}`;
-}
-
-function prereleaseCounterParts(version: string): { baseVersion: string; number: number } | null {
-  const prerelease = /^(\d+\.\d+\.\d+)-.+\.(\d+)$/.exec(version);
-  if (prerelease?.[1] != null && prerelease[2] != null) {
-    return { baseVersion: prerelease[1], number: Number(prerelease[2]) };
-  }
-  const nightly = /^(\d+\.\d+\.\d+)\.nightly\.(\d+)$/i.exec(version);
-  if (nightly?.[1] != null && nightly[2] != null) {
-    return { baseVersion: nightly[1], number: Number(nightly[2]) };
-  }
-  return null;
 }
 
 type ParsedRange = { end: number; start: number } | "invalid" | "unsatisfiable" | null;
@@ -138,53 +157,51 @@ function sendArtifact(
   endWithOptionalBody(request, response, artifactBody);
 }
 
+function sendFileArtifact(
+  request: IncomingMessage,
+  response: ServerResponse,
+  path: string,
+  size: number,
+  contentType: string,
+): void {
+  response.setHeader("accept-ranges", "bytes");
+  response.setHeader("content-type", contentType);
+  const range = parseByteRange(request.headers.range, size);
+  if (range === "invalid" || range === "unsatisfiable") {
+    response.statusCode = 416;
+    response.setHeader("content-range", `bytes */${size}`);
+    response.end();
+    return;
+  }
+
+  if (range != null) {
+    response.statusCode = 206;
+    response.setHeader("content-length", String(range.end - range.start + 1));
+    response.setHeader("content-range", `bytes ${range.start}-${range.end}/${size}`);
+    if (request.method === "HEAD") {
+      response.end();
+      return;
+    }
+    createReadStream(path, { end: range.end, start: range.start }).pipe(response);
+    return;
+  }
+
+  response.setHeader("content-length", String(size));
+  if (request.method === "HEAD") {
+    response.end();
+    return;
+  }
+  createReadStream(path).pipe(response);
+}
+
 function normalizeChannel(value: string | undefined): UpdaterFixtureChannel {
   if (value == null || value.length === 0) return "stable";
-  if (value === "stable" || value === "beta" || value === "nightly" || value === "preview") return value;
+  if (isReleaseChannel(value)) return value;
   throw new Error(`unsupported updater fixture channel: ${value}`);
 }
 
 function channelMetadata(channel: UpdaterFixtureChannel, version: string): Record<string, unknown> {
-  if (channel === "stable") {
-    return {
-      baseVersion: version,
-      releaseVersion: version,
-      stableVersion: version,
-    };
-  }
-
-  if (channel === "beta") {
-    const countedVersion = prereleaseCounterParts(version);
-    if (countedVersion == null) {
-      throw new Error(`beta updater fixture version must match x.y.z-<label>.N; got ${version}`);
-    }
-    return {
-      baseVersion: countedVersion.baseVersion,
-      betaNumber: countedVersion.number,
-      betaVersion: version,
-    };
-  }
-
-  const countedVersion = prereleaseCounterParts(version);
-  if (countedVersion == null) {
-    throw new Error(`${channel} updater fixture version must match x.y.z-<label>.N; got ${version}`);
-  }
-  if (channel === "nightly") {
-    return {
-      baseVersion: countedVersion.baseVersion,
-      nightlyNumber: countedVersion.number,
-      nightlyVersion: version,
-      releaseVersion: version,
-      stableVersion: countedVersion.baseVersion,
-    };
-  }
-
-  return {
-    baseVersion: countedVersion.baseVersion,
-    previewNumber: countedVersion.number,
-    previewVersion: version,
-    releaseVersion: version,
-  };
+  return releaseMetadataVersionFields(channel, version);
 }
 
 export async function startUpdaterFixtureServer(options: UpdaterFixtureOptions = {}): Promise<UpdaterFixtureServer> {
@@ -195,16 +212,44 @@ export async function startUpdaterFixtureServer(options: UpdaterFixtureOptions =
   const version = options.version ?? "99.0.0";
   const platformKey = platform === "win" ? "win" : "mac";
   const artifactKey = platform === "win" ? "installer" : "dmg";
-  const artifactName = platform === "win"
+  const artifactName = options.artifactPath != null
+    ? basename(options.artifactPath)
+    : platform === "win"
     ? `open-design-${version}-win-x64-setup.exe`
     : `open-design-${version}-mac-arm64.dmg`;
   const contentType = platform === "win"
     ? "application/vnd.microsoft.portable-executable"
     : "application/x-apple-diskimage";
+  const artifactFileStat = options.artifactPath == null ? null : await stat(options.artifactPath);
+  if (artifactFileStat != null && (!artifactFileStat.isFile() || artifactFileStat.size <= 0)) {
+    throw new Error(`updater fixture artifact path must be a non-empty file: ${options.artifactPath}`);
+  }
   const artifactBody = Buffer.isBuffer(options.artifactBody)
     ? options.artifactBody
     : Buffer.from(options.artifactBody ?? `Open Design updater fixture ${version}\n`, "utf8");
-  const sha256 = createHash("sha256").update(artifactBody).digest("hex");
+  const artifactSize = artifactFileStat?.size ?? artifactBody.byteLength;
+  const sha256 = options.artifactPath == null
+    ? createHash("sha256").update(artifactBody).digest("hex")
+    : await sha256File(options.artifactPath);
+  const payloadName = options.payloadPath == null
+    ? platform === "win"
+      ? `open-design-${version}-win-x64-payload.7z`
+      : `open-design-${version}-mac-arm64-payload.zip`
+    : basename(options.payloadPath);
+  const artifactPathSegment = encodeURIComponent(artifactName);
+  const payloadPathSegment = encodeURIComponent(payloadName);
+  const includePayload = options.includePayload === true || options.payloadPath != null;
+  const payloadBody = Buffer.isBuffer(options.payloadBody)
+    ? options.payloadBody
+    : Buffer.from(options.payloadBody ?? `Open Design launcher payload fixture ${version}\n`, "utf8");
+  const payloadFileStat = options.payloadPath == null ? null : await stat(options.payloadPath);
+  if (payloadFileStat != null && (!payloadFileStat.isFile() || payloadFileStat.size <= 0)) {
+    throw new Error(`updater fixture payload path must be a non-empty file: ${options.payloadPath}`);
+  }
+  const payloadSize = payloadFileStat?.size ?? payloadBody.byteLength;
+  const payloadSha256 = options.payloadPath == null
+    ? createHash("sha256").update(payloadBody).digest("hex")
+    : await sha256File(options.payloadPath);
 
   let info: UpdaterFixtureInfo | null = null;
   const server = createServer((request, response) => {
@@ -228,9 +273,20 @@ export async function startUpdaterFixtureServer(options: UpdaterFixtureOptions =
                 contentType,
                 name: artifactName,
                 sha256Url: info.checksumUrl,
-                size: artifactBody.byteLength,
+                size: artifactSize,
                 url: info.artifactUrl,
               },
+              ...(includePayload && info.payloadUrl != null && info.payloadChecksumUrl != null
+                ? {
+                    payload: {
+                      contentType: platform === "win" ? "application/x-7z-compressed" : "application/zip",
+                      name: payloadName,
+                      sha256Url: info.payloadChecksumUrl,
+                      size: payloadSize,
+                      url: info.payloadUrl,
+                    },
+                  }
+                : {}),
             },
             channel,
             enabled: true,
@@ -245,13 +301,30 @@ export async function startUpdaterFixtureServer(options: UpdaterFixtureOptions =
       }));
       return;
     }
-    if (path === `/${channel}/versions/${version}/${artifactName}`) {
+    if (path === `/${channel}/versions/${version}/${artifactPathSegment}`) {
+      if (options.artifactPath != null && artifactFileStat != null) {
+        sendFileArtifact(request, response, options.artifactPath, artifactFileStat.size, contentType);
+        return;
+      }
       sendArtifact(request, response, artifactBody, contentType);
       return;
     }
-    if (path === `/${channel}/versions/${version}/${artifactName}.sha256`) {
+    if (includePayload && path === `/${channel}/versions/${version}/${payloadPathSegment}`) {
+      if (options.payloadPath != null && payloadFileStat != null) {
+        sendFileArtifact(request, response, options.payloadPath, payloadFileStat.size, platform === "win" ? "application/x-7z-compressed" : "application/zip");
+        return;
+      }
+      sendArtifact(request, response, payloadBody, platform === "win" ? "application/x-7z-compressed" : "application/zip");
+      return;
+    }
+    if (path === `/${channel}/versions/${version}/${artifactPathSegment}.sha256`) {
       response.setHeader("content-type", "text/plain; charset=utf-8");
       response.end(`${sha256}  ${artifactName}\n`);
+      return;
+    }
+    if (includePayload && path === `/${channel}/versions/${version}/${payloadPathSegment}.sha256`) {
+      response.setHeader("content-type", "text/plain; charset=utf-8");
+      response.end(`${payloadSha256}  ${payloadName}\n`);
       return;
     }
     response.statusCode = 404;
@@ -260,13 +333,19 @@ export async function startUpdaterFixtureServer(options: UpdaterFixtureOptions =
 
   await listen(server, port, host);
   const origin = serverOrigin(server);
-  const artifactUrl = `${origin}/${channel}/versions/${version}/${artifactName}`;
+  const artifactUrl = `${origin}/${channel}/versions/${version}/${artifactPathSegment}`;
+  const payloadUrl = includePayload ? `${origin}/${channel}/versions/${version}/${payloadPathSegment}` : null;
   info = {
+    artifactPath: options.artifactPath ?? null,
     artifactUrl,
     channel,
     checksumUrl: `${artifactUrl}.sha256`,
     metadataUrl: `${origin}/${channel}/latest/metadata.json`,
     origin,
+    payloadChecksumUrl: payloadUrl == null ? null : `${payloadUrl}.sha256`,
+    payloadPath: options.payloadPath ?? null,
+    payloadSha256: includePayload ? payloadSha256 : null,
+    payloadUrl,
     platform,
     sha256,
     version,

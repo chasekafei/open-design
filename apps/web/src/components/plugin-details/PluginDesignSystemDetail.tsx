@@ -23,15 +23,25 @@ import {
   fetchPluginAssetText,
 } from '../../providers/registry';
 import { DesignSpecView } from '../DesignSpecView';
-import { PreviewModal, type PreviewView } from '../PreviewModal';
+import {
+  PreviewModal,
+  type PreviewSharePopoverItem,
+  type PreviewView,
+} from '../PreviewModal';
 import { buildPluginShareUrl, PluginShareMenu } from './PluginShareMenu';
 import { PluginMetaSections } from './PluginMetaSections';
+import { buildPluginUseMenu, pluginUsePrimaryAction } from './pluginUseMenu';
+import type { PluginUseAction } from '../plugins-home/useActions';
 
 interface Props {
   record: InstalledPluginRecord;
   onClose: () => void;
-  onUse: (record: InstalledPluginRecord) => void;
+  onUse: (record: InstalledPluginRecord, action: PluginUseAction) => void;
+  onDuplicate?: (record: InstalledPluginRecord) => void;
   isApplying?: boolean;
+  hideUseAction?: boolean;
+  // Analytics — forwarded to PreviewModal's share popover.
+  onSharePopoverItemClick?: (item: PreviewSharePopoverItem) => void;
 }
 
 interface ContextRef {
@@ -63,7 +73,10 @@ export function PluginDesignSystemDetail({
   record,
   onClose,
   onUse,
+  onDuplicate,
   isApplying,
+  hideUseAction,
+  onSharePopoverItemClick,
 }: Props) {
   const { t, locale } = useI18n();
   const localizedTitle = localizePluginTitle(locale, record);
@@ -171,14 +184,18 @@ export function PluginDesignSystemDetail({
           </div>
         ),
       }}
-      primaryAction={{
-        label: 'Use plugin',
-        onClick: () => onUse(record),
-        busy: !!isApplying,
-        busyLabel: 'Applying…',
-        testId: `plugin-details-use-${record.id}`,
-      }}
+      primaryAction={hideUseAction
+        ? undefined
+        : {
+            label: pluginUsePrimaryAction(record, t).label,
+            onClick: () => onUse(record, pluginUsePrimaryAction(record, t).action),
+            busy: !!isApplying,
+            busyLabel: 'Applying…',
+            testId: `plugin-details-use-${record.id}`,
+            menu: buildPluginUseMenu(record, onUse, t, onDuplicate),
+          }}
       headerExtras={<PluginShareMenu record={record} variant="inline" />}
+      onSharePopoverItemClick={onSharePopoverItemClick}
     />
   );
 }

@@ -46,6 +46,7 @@ export function resolveWinPaths(config: ToolPackConfig): WinPaths {
     installerBasePayloadPath: join(namespaceRoot, "installer", "payload-base.7z"),
     installerOverlayPayloadPath: join(namespaceRoot, "installer", "payload-overlay.7z"),
     installerScriptPath: join(namespaceRoot, "installer", "installer.nsi"),
+    launcherPayloadPath: join(namespaceRoot, "payload", `${PRODUCT_NAME}-${namespaceToken}-payload.7z`),
     publicDesktopShortcutPath: join(process.env.PUBLIC ?? join(dirname(homedir()), "Public"), "Desktop", identity.shortcutName),
     installMarkerPath: join(namespaceRoot, "logs", "install.marker.json"),
     installTimingPath: join(namespaceRoot, "logs", "install.timing.json"),
@@ -93,6 +94,10 @@ export function resolveWinLocalDataRoot(config: ToolPackConfig): string {
 export async function createWinRemovalPlan(config: ToolPackConfig): Promise<WinRemovalTarget[]> {
   const runtimeRoot = config.roots.runtime.namespaceRoot;
   const targets: Array<Omit<WinRemovalTarget, "exists">> = [
+    { path: join(runtimeRoot, "cache"), scope: "cache", willRemove: config.removeCache === true },
+    { path: join(runtimeRoot, "updates", "downloads"), scope: "cache", willRemove: config.removeCache === true },
+    { path: join(runtimeRoot, "updates", "releases"), scope: "cache", willRemove: config.removeCache === true },
+    { path: join(runtimeRoot, "updates", "staging"), scope: "cache", willRemove: config.removeCache === true },
     { path: join(runtimeRoot, "data"), scope: "data", willRemove: config.removeData },
     { path: join(runtimeRoot, "logs"), scope: "logs", willRemove: config.removeLogs },
     { path: join(runtimeRoot, "runtime"), scope: "sidecars", willRemove: config.removeSidecars },

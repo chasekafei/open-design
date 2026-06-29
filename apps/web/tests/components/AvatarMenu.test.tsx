@@ -111,6 +111,8 @@ function openMenu() {
 describe('AvatarMenu', () => {
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
+    window.localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -207,5 +209,81 @@ describe('AvatarMenu', () => {
     expect(
       within(popover).getByRole('option', { name: /custom-codex-model/i }),
     ).toBeTruthy();
+  });
+
+  it('routes the AMR account shortcut through the active AMR profile', () => {
+    renderMenu({
+      config: {
+        ...baseConfig,
+        agentId: 'amr',
+        agentCliEnv: {
+          amr: {
+            OPEN_DESIGN_AMR_PROFILE: 'test',
+          },
+        },
+      },
+      agents: [
+        {
+          id: 'amr',
+          name: 'Open Design AMR',
+          bin: 'vela',
+          available: true,
+          models: [{ id: 'default', label: 'Default (CLI config)' }],
+        },
+      ],
+    });
+
+    openMenu();
+
+    expect(
+      screen
+        .getByRole('link', { name: 'avatar.amrConsoleavatar.amrConsoleMeta' })
+        .getAttribute('href'),
+    ).toBe('https://vela.powerformer.net/wallet?source=open_design');
+  });
+
+  it('adds Open Design attribution to the AMR account shortcut on click', () => {
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderMenu({
+      config: {
+        ...baseConfig,
+        agentId: 'amr',
+        telemetry: { metrics: true },
+        installationId: 'od-install-abc',
+        agentCliEnv: {
+          amr: {
+            OPEN_DESIGN_AMR_PROFILE: 'test',
+          },
+        },
+      },
+      agents: [
+        {
+          id: 'amr',
+          name: 'Open Design AMR',
+          bin: 'vela',
+          available: true,
+          models: [{ id: 'default', label: 'Default (CLI config)' }],
+        },
+      ],
+    });
+
+    openMenu();
+    const link = screen.getByRole('link', {
+      name: 'avatar.amrConsoleavatar.amrConsoleMeta',
+    }) as HTMLAnchorElement;
+    fireEvent.click(link);
+
+    const url = new URL(link.href);
+    expect(url.searchParams.get('source')).toBe('open_design');
+    expect(url.searchParams.get('od_origin')).toBe('open_design');
+    expect(url.searchParams.get('od_entry_source')).toBe('avatar_amr_console');
+    expect(url.searchParams.get('od_device_id')).toBe('od-install-abc');
+    expect(url.searchParams.get('od_entry_id')).toMatch(/^od-amr-/u);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/integrations/vela/analytics-entry',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 });

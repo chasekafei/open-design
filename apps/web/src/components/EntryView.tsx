@@ -54,6 +54,9 @@ interface Props {
   promptTemplates: PromptTemplateSummary[];
   defaultDesignSystemId: string | null;
   agents: AgentInfo[];
+  // Forwarded to EntryShell → OnboardingView so the AMR cloud card can show a
+  // detecting/skeleton state while the cold-start agent stream is in flight.
+  agentsLoading?: boolean;
   // Execution / model-switching context forwarded to the EntryShell so the
   // sticky top-bar can expose the active CLI/BYOK + model and persist
   // changes through the same channels as the project view.
@@ -106,10 +109,11 @@ interface Props {
   ) => Promise<ImportClaudeDesignOutcome | void> | ImportClaudeDesignOutcome | void;
   onImportFolder?: (baseDir: string) => Promise<void> | void;
   onImportFolderResponse?: (response: OpenDesignHostProjectImportSuccess) => Promise<void> | void;
-  onOpenProject: (id: string) => void;
+  onOpenProject: (id: string) => Promise<boolean> | boolean | void;
   onOpenLiveArtifact: (projectId: string, artifactId: string) => void;
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, name: string) => void;
+  onProjectsRefresh?: () => Promise<void> | void;
   onChangeDefaultDesignSystem: (id: string) => void;
   onCreateDesignSystem?: () => void;
   onOpenDesignSystem?: (id: string) => void;
@@ -222,6 +226,7 @@ export function EntryView({
   promptTemplates,
   defaultDesignSystemId,
   agents,
+  agentsLoading,
   config,
   providerModelsCache,
   onProviderModelsCacheChange,
@@ -249,6 +254,7 @@ export function EntryView({
   onOpenLiveArtifact,
   onDeleteProject,
   onRenameProject,
+  onProjectsRefresh,
   onChangeDefaultDesignSystem,
   onCreateDesignSystem,
   onOpenDesignSystem,
@@ -343,6 +349,7 @@ export function EntryView({
       providerModelsCache={providerModelsCache}
       onProviderModelsCacheChange={onProviderModelsCacheChange}
       agents={agents}
+      {...(agentsLoading !== undefined ? { agentsLoading } : {})}
       daemonLive={daemonLive}
       onModeChange={onModeChange}
       onAgentChange={onAgentChange}
@@ -361,6 +368,7 @@ export function EntryView({
       onOpenLiveArtifact={onOpenLiveArtifact}
       onDeleteProject={onDeleteProject}
       onRenameProject={onRenameProject}
+      onProjectsRefresh={onProjectsRefresh}
       onChangeDefaultDesignSystem={onChangeDefaultDesignSystem}
       onCreateDesignSystem={onCreateDesignSystem}
       onOpenDesignSystem={onOpenDesignSystem}

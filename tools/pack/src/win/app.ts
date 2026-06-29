@@ -117,9 +117,11 @@ async function buildWorkspaceArtifacts(config: ToolPackConfig): Promise<void> {
   const webNextEnvPath = join(config.workspaceRoot, "apps", "web", "next-env.d.ts");
   const previousWebNextEnv = await readFile(webNextEnvPath, "utf8").catch(() => null);
 
+  await runPnpm(config, ["--filter", "@open-design/release", "build"]);
   await runPnpm(config, ["--filter", "@open-design/contracts", "build"]);
   await runPnpm(config, ["--filter", "@open-design/registry-protocol", "build"]);
   await runPnpm(config, ["--filter", "@open-design/sidecar-proto", "build"]);
+  await runPnpm(config, ["--filter", "@open-design/launcher-proto", "build"]);
   await runPnpm(config, ["--filter", "@open-design/sidecar", "build"]);
   await runPnpm(config, ["--filter", "@open-design/platform", "build"]);
   await runPnpm(config, ["--filter", "@open-design/agui-adapter", "build"]);

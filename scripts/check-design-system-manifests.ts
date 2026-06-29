@@ -383,14 +383,21 @@ function validateTokenSourceReferences(
   const sourceName = binding.sourceName ?? binding.name;
   const declared = tokenDeclarations.get(sourceName);
   if (declared === undefined) return;
+  let hasTokensCssSource = false;
   for (const source of binding.sources) {
     const line = parseTokenSourceLine(source, tokensPath);
     if (line === undefined) continue;
+    hasTokensCssSource = true;
     if (line !== declared.line) {
       violations.push(
         `${repositoryManifestPath}: ${reportPath} token ${binding.name} source ${source} must point to ${tokensPath}:${declared.line}`,
       );
     }
+  }
+  if (!hasTokensCssSource) {
+    violations.push(
+      `${repositoryManifestPath}: ${reportPath} token ${binding.name} must cite a ${tokensPath}:<line> source`,
+    );
   }
 }
 
@@ -496,7 +503,7 @@ async function validateDeclaredJsonFiles(
   }
 }
 
-async function validateComponentsManifestCache(
+export async function validateComponentsManifestCache(
   violations: string[],
   repositoryManifestPath: string,
   brandRoot: string,
@@ -520,6 +527,11 @@ async function validateComponentsManifestCache(
     if (!isDeepStrictEqual(cachedManifest, derivedManifest)) {
       violations.push(
         `${repositoryManifestPath}: ${toRepositoryPath(cachePath)} is stale; regenerate it from components.html + tokens.css`,
+      );
+    }
+    if (derivedManifest.tokens.undeclaredReferenced.length > 0) {
+      violations.push(
+        `${repositoryManifestPath}: ${toRepositoryPath(cachePath)} references undeclared component token(s): ${derivedManifest.tokens.undeclaredReferenced.join(", ")}`,
       );
     }
   } catch (error) {

@@ -1,11 +1,11 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '@/playwright/suite';
 import { ensureRailOpen } from '@/playwright/rail';
 import type { Page } from '@playwright/test';
 import { T } from '@/timeouts';
 
 const STORAGE_KEY = 'open-design:config';
 
-test.describe.configure({ timeout: 30_000 });
+test.describe.configure({ timeout: T.xlong });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((key) => {
@@ -49,7 +49,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('[P0] API empty stream shows No output instead of Done', async ({ page }) => {
+test('[P0] @critical API empty stream shows No output instead of Done', async ({ page }) => {
   await page.route('**/api/proxy/openai/stream', async (route) => {
     await route.fulfill({
       status: 200,
@@ -83,7 +83,7 @@ async function gotoEntryHome(page: Page) {
   await waitForLoadingToClear(page);
   const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve Open Design' });
   if (await privacyDialog.isVisible()) {
-    await privacyDialog.getByRole('button', { name: /not now/i }).click();
+    await privacyDialog.getByRole('button', { name: /I get it|not now|got it|don't share/i }).click();
     await expect(privacyDialog).toHaveCount(0);
   }
   await expect(page.getByTestId('home-hero')).toBeVisible();

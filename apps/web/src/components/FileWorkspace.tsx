@@ -8,12 +8,14 @@ import {
   type ReactNode,
 } from 'react';
 import { Button } from '@open-design/components';
-import type { TrackingProjectKind } from '@open-design/contracts/analytics';
+import type { DesignSystemEditClickProps, TrackingProjectKind } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
 import {
   trackFileManagerClick,
+  trackDesignSystemEditClick,
   trackFileUploadResult,
   trackPageView,
+  trackTabLauncherClick,
 } from '../analytics/events';
 import { deriveUploadCohort } from '../analytics/upload-tracking';
 import { useT } from '../i18n';
@@ -23,17 +25,41 @@ import {
   fetchProjectFileText,
   fetchProjectFolders,
   projectFileUrl,
+  projectRawUrl,
+  applyLibraryAsset,
   createProjectFolder,
+  deleteDesignSystemDraft,
   deleteProjectFolder,
   renameProjectFile,
+  startDesignSystemTokenContractRebuildJob,
   updateDesignSystemDraft,
   type UploadProjectFilesResult,
   uploadProjectFiles,
   writeProjectTextFile,
 } from '../providers/registry';
+import type { Dict } from '../i18n/types';
+import { downloadDesignSystemArchive, downloadProjectArchive } from '../runtime/exports';
+import { finalizeBrandProject } from '../runtime/brands';
 import { deriveFileOps, type FileOpEntry } from '../runtime/file-ops';
+import { parseDesignMd } from '../runtime/design-md-parse';
+import {
+  deleteBrandImage,
+  deleteBrandLogo,
+  readDesignMd,
+  replaceDesignMdColorAtIndex,
+  updateBrandColor,
+} from '../runtime/kit-edit';
 import { latestTodosFromEvents, type TodoItem } from '../runtime/todos';
 import { deliverableSlideNavForActiveFile, isSlideNavDeliverableNow } from '../runtime/slide-nav';
+import { buildSrcdoc } from '../runtime/srcdoc';
+import { useDesignKit, hostnameOf, type KitColor } from '../runtime/design-kit';
+import { useKitModuleUpload } from '../runtime/kit-upload';
+import {
+  DesignKitView,
+  type DesignKitActionFeedbackTone,
+  type DesignKitEditFocusRequest,
+  type HeaderMenuAction,
+} from './DesignKitView';
 import {
   type AgentEvent,
   type AgentInfo,
@@ -60,6 +86,8 @@ import {
 } from '../types';
 import type { ChatSessionMode, WorkspaceContextItem } from '@open-design/contracts';
 import { createTerminal, killTerminal } from '../state/projects';
+import { navigate } from '../router';
+import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry';
 import type { QuestionForm } from '../artifacts/question-form';
 import { DesignFilesPanel, type DesignFilesNavState } from './DesignFilesPanel';
 import { DesignBrowserPanel, labelFromUrl, type BrowserPageInfo } from './DesignBrowserPanel';
@@ -76,6 +104,7 @@ import { TerminalViewer } from './workspace/TerminalViewer';
 import { LiveArtifactBadges } from './LiveArtifactBadges';
 import { MissingBrandFontsBanner } from './MissingBrandFontsBanner';
 import { PasteTextDialog } from './PasteTextDialog';
+import { LibraryPicker } from './LibraryPicker';
 import { QuestionsPanel } from './QuestionsPanel';
 import { QuickSwitcher } from './QuickSwitcher';
 import { SketchEditor } from './SketchEditor';
@@ -86,10 +115,9 @@ import {
   type SketchItem,
 } from './sketch-model';
 import { AnimatePresence } from 'motion/react';
-import { GenerationPreviewStage } from './GenerationPreviewStage';
-import { AmrGuidance } from './AmrGuidance';
-import { buildGenerationPreviewState } from '../runtime/generation-preview';
 import type { ChatMessage } from '../types';
+
+type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
 interface Props {
   projectId: string;
@@ -108,7 +136,6 @@ interface Props {
   filesRefreshKey?: number;
   onRefreshFiles: () => Promise<void> | void;
   isDeck: boolean;
-  onExportAsPptx?: ((fileName: string) => void) | undefined;
   streaming?: boolean;
   commentQueueOnSend?: boolean;
   commentSendDisabled?: boolean;
@@ -116,6 +143,9 @@ interface Props {
   // Open the named file AND surface its Share/Export menu. Drives the chat-side
   // "Share" next-step action without a dedicated share backend.
   shareRequest?: { name: string; nonce: number } | null;
+  // Open the named file AND surface its Download/Export menu. Drives the
+  // chat-side "Download" next-step action.
+  downloadRequest?: { name: string; nonce: number } | null;
   // Flip a deck preview to a given slide when a queued chat send starts. Mirrors
   // `shareRequest`: the named file is activated (if open) and the matching
   // FileViewer consumes the nonce to navigate.
@@ -142,9 +172,13 @@ interface Props {
   focusMode?: boolean;
   onFocusModeChange?: (next: boolean) => void;
   designSystemProject?: DesignSystemSummary | null;
+  designSystemBrandId?: string | null;
   defaultDesignSystemId?: string | null;
-  onSetDefaultDesignSystem?: (id: string | null) => void;
+  onSetDefaultDesignSystem?: (id: string | null) => Promise<void> | void;
   onDesignSystemsRefresh?: () => Promise<void> | void;
+  // Delete the backing project (and navigate away) for the design-system project
+  // tab's "..." menu. Resolves to handleDeleteProject in App.
+  onDeleteDesignSystemProject?: (id: string) => Promise<boolean> | boolean;
   onDesignSystemNeedsWork?: (
     sectionTitle: string,
     feedback: string,
@@ -156,7 +190,8 @@ interface Props {
     decision: DesignSystemReviewDecision,
     details?: DesignSystemReviewDetails,
   ) => void;
-  onUseDesignSystem?: (id: string, title: string) => void;
+  onUseDesignSystem?: (id: string, title: string) => Promise<void> | void;
+  designSystemEditRequest?: DesignKitEditFocusRequest | null;
   onConnectRepo?: () => void;
   githubConnected?: boolean;
   commentPortalId?: string;
@@ -327,6 +362,7 @@ function createDefaultDesignFilesNavState(): DesignFilesNavState {
 interface DesignSystemProjectSectionReview {
   section: DesignSystemProjectSection;
   previewFile: ProjectFile | null;
+  previewDisplay: DesignSystemReviewPreviewDisplay;
   reviewEntry: DesignSystemReviewEntry | undefined;
   sectionActivity: DesignSystemSectionActivity;
   changedAfterFeedback: boolean;
@@ -334,6 +370,16 @@ interface DesignSystemProjectSectionReview {
   sectionStatusLabel: string;
   reviewTimeLabel: string | null;
 }
+type DesignSystemReviewPreviewDisplay = 'specimen' | 'ui-kit' | 'asset';
+interface DesignSystemCardManifestEntry {
+  path: string;
+  group?: string;
+  name?: string;
+  subtitle?: string;
+  viewport?: string;
+}
+type DesignSystemCardManifestMap = Map<string, DesignSystemCardManifestEntry>;
+const DESIGN_SYSTEM_CARD_MANIFEST_OPTIONAL_STRING_FIELDS = ['group', 'name', 'subtitle', 'viewport'] as const;
 type DesignSystemGenerationStepStatus = 'pending' | 'running' | 'succeeded';
 interface DesignSystemGenerationStep {
   id: string;
@@ -360,12 +406,12 @@ export function FileWorkspace({
   filesRefreshKey = 0,
   onRefreshFiles,
   isDeck,
-  onExportAsPptx,
   streaming,
   commentQueueOnSend = false,
   commentSendDisabled = false,
   openRequest,
   shareRequest,
+  downloadRequest,
   slideNavRequest,
   liveArtifactEvents = [],
   designSystemActivityEvents = [],
@@ -384,13 +430,16 @@ export function FileWorkspace({
   focusMode = false,
   onFocusModeChange,
   designSystemProject = null,
+  designSystemBrandId = null,
   defaultDesignSystemId = null,
   onSetDefaultDesignSystem,
   onDesignSystemsRefresh,
+  onDeleteDesignSystemProject,
   onDesignSystemNeedsWork,
   designSystemReview,
   onDesignSystemReviewDecision,
   onUseDesignSystem,
+  designSystemEditRequest,
   onConnectRepo,
   githubConnected,
   commentPortalId,
@@ -409,11 +458,6 @@ export function FileWorkspace({
   onActiveContextChange,
   onWorkspaceContextsChange,
   messages = [],
-  artifactHtml,
-  conversationError,
-  onRetry,
-  onAuthorizeAndRetry,
-  onLaunchTerminalAuth,
   conversationId,
   headerActions,
   questionForm = null,
@@ -461,6 +505,7 @@ export function FileWorkspace({
   );
 
   const [showPasteDialog, setShowPasteDialog] = useState(false);
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   // The folder the Design Files panel is currently viewing (synced via
   // onCurrentDirChange). New files — uploads, pastes, sketches, dropped files —
@@ -559,20 +604,15 @@ export function FileWorkspace({
     };
   }, [projectId]);
 
-  const generationPreview = useMemo(
-    () =>
-      buildGenerationPreviewState({
-        designSystemProject: Boolean(designSystemProject),
-        messages,
-        streaming: Boolean(streaming),
-        activeTab,
-        projectFiles: visibleFiles,
-        liveArtifacts,
-        artifactHtml,
-        conversationError,
-      }),
-    [designSystemProject, messages, streaming, activeTab, visibleFiles, liveArtifacts, artifactHtml, conversationError],
-  );
+  // True when the Design Files tab has nothing to attach: no files, no live
+  // artifacts, no folders. Mirrors DesignFilesPanel's own empty-state gate so
+  // the "Design files" composer context and the empty placeholder agree on
+  // when the tab is actually empty. Reused below to suppress the auto-attached
+  // workspace context for a brand-new/empty project.
+  const designFilesTabIsEmpty =
+    visibleFiles.length === 0
+    && liveArtifactEntries.length === 0
+    && projectFolders.length === 0;
 
   // Pull the persisted active tab in when the parent's hydration completes
   // (or on project switch). Fall back to the Design Files browser so a
@@ -712,7 +752,11 @@ export function FileWorkspace({
   // back to the last remaining tab. Skip transient activeTab values
   // (DESIGN_FILES_TAB, pending sketches) since those aren't in persistedTabs.
   useEffect(() => {
-    if (activeTab === DESIGN_FILES_TAB || activeTab === DESIGN_SYSTEM_TAB || activeTab === QUESTIONS_TAB) return;
+    if (
+      activeTab === DESIGN_FILES_TAB
+      || activeTab === DESIGN_SYSTEM_TAB
+      || activeTab === QUESTIONS_TAB
+    ) return;
     if (isBrowserTabId(activeTab)) {
       if (!browserTabs.some((tab) => tab.id === activeTab)) {
         setActiveTab(DESIGN_FILES_TAB);
@@ -725,6 +769,13 @@ export function FileWorkspace({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persistedTabs, activeTab]);
+
+  useEffect(() => {
+    if (!designSystemEditRequest) return;
+    setUploadError(null);
+    setPersistedActive(designSystemProject ? DESIGN_SYSTEM_TAB : DESIGN_FILES_TAB);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [designSystemEditRequest?.nonce]);
 
   // External open requests from chat (tool cards, produced-file chips,
   // deep-linked URL, or the parent's auto-open after an agent Write) —
@@ -774,6 +825,21 @@ export function FileWorkspace({
     setActiveTab(name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareRequest]);
+
+  // Download request: same as shareRequest, but the FileViewer opens its
+  // Download/Export menu. Without this, Download did nothing whenever the target
+  // artifact was not already the active tab (it forwards only on a name match).
+  useEffect(() => {
+    if (!downloadRequest) return;
+    const name = downloadRequest.name;
+    if (!name) return;
+    commitTabsState(workspaceTabsState(
+      persistedTabs.includes(name) ? persistedTabs : [...persistedTabs, name],
+      name,
+    ));
+    setActiveTab(name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [downloadRequest]);
 
   // Slide-nav request: decide deliverability once, at fire time. Only if the
   // named deck is already an open tab do we mark this nonce deliverable and
@@ -861,7 +927,7 @@ export function FileWorkspace({
   function activateWorkspaceTab(tabId: string) {
     if (tabId === QUESTIONS_TAB) {
       setUploadError(null);
-      setActiveTab(QUESTIONS_TAB);
+      setActiveTab(tabId);
       return;
     }
     const sketchEntry = sketches[tabId];
@@ -1457,11 +1523,13 @@ export function FileWorkspace({
       return {
         id: 'workspace:design-system',
         kind: 'design-system',
-        label: 'Design System',
+        label: t('dsManager.tabDesignSystem'),
         tabId: activeTab,
       };
     }
     if (activeTab === DESIGN_FILES_TAB) {
+      // Nothing to reference yet — don't auto-stage an empty "Design files" chip.
+      if (designFilesTabIsEmpty) return null;
       const trimmedDir = uploadDir.trim();
       const label = trimmedDir.split('/').filter(Boolean).pop() || t('workspace.designFiles');
       return {
@@ -1533,6 +1601,7 @@ export function FileWorkspace({
     activeTab,
     browserTabs,
     conversations,
+    designFilesTabIsEmpty,
     designSystemProject,
     resolvedDir,
     t,
@@ -1587,7 +1656,7 @@ export function FileWorkspace({
       push({
         id: 'workspace:design-system',
         kind: 'design-system',
-        label: 'Design System',
+        label: t('dsManager.tabDesignSystem'),
         tabId: DESIGN_SYSTEM_TAB,
       });
     }
@@ -1700,6 +1769,15 @@ export function FileWorkspace({
     const measure = () => {
       frame = 0;
       setTabsOverflowing(tabBar.scrollWidth > tabBar.clientWidth + 1);
+      // Pin the sticky Design Files tab to the exact right edge of the sticky
+      // Design System tab (its real, locale-dependent width + the 2px flex gap),
+      // so the two read as adjacent instead of leaving a hardcoded-offset gap.
+      const systemTab = tabBar.querySelector<HTMLElement>('.ws-tab.design-system-tab');
+      if (systemTab) {
+        tabBar.style.setProperty('--ds-system-tab-w', `${Math.round(systemTab.offsetWidth) + 2}px`);
+      } else {
+        tabBar.style.removeProperty('--ds-system-tab-w');
+      }
     };
     const requestMeasure = () => {
       if (frame) window.cancelAnimationFrame(frame);
@@ -1722,30 +1800,6 @@ export function FileWorkspace({
 
   const isActiveSketch = activeFile?.kind === 'sketch' && isSketchName(activeFile.name);
   const activeSketch = activeFile && isActiveSketch ? sketches[activeFile.name] : null;
-  // The design-files tab is the default landing tab, so while a run is in
-  // flight and no previewable artifact exists yet the progress card must take
-  // over its empty "Creations will appear here" state rather than leave an idle
-  // empty list. (Pre-#3516 the preview branch rendered before the design-files
-  // branch with no tab guard; the composer rewrite added an `activeTab !==
-  // DESIGN_FILES_TAB` clause here that hid the progress card on the default
-  // tab.) But the override is scoped to the *empty* design-files tab: a
-  // populated project keeps its file browser while generating. The condition
-  // mirrors DesignFilesPanel's own empty-state gate exactly (no files, no live
-  // artifacts, no folders), so the card only wins where the panel would have
-  // shown its empty placeholder.
-  const designFilesTabIsEmpty =
-    visibleFiles.length === 0
-    && liveArtifactEntries.length === 0
-    && projectFolders.length === 0;
-  const showGenerationPreview = Boolean(generationPreview)
-    && activeTab !== DESIGN_SYSTEM_TAB
-    && (activeTab !== DESIGN_FILES_TAB || designFilesTabIsEmpty)
-    && !isBrowserTabId(activeTab)
-    && !isSideChatTabId(activeTab)
-    && !isTerminalTabId(activeTab)
-    && !activeLiveArtifact
-    && !activeFile;
-
   // The "+" launcher's create-new actions come from the registry. `openTab`
   // reuses the same tab-state path as opening a file so a new terminal:<id>
   // tab is focused; `createBrowser` opens an embedded browser tab.
@@ -1833,12 +1887,12 @@ export function FileWorkspace({
               tabIndex={0}
               data-testid="design-system-project-tab"
               onClick={() => setPersistedActive(DESIGN_SYSTEM_TAB)}
-              title="Design System"
+              title={t('dsManager.tabDesignSystem')}
             >
               <span className="tab-icon" aria-hidden>
                 <Icon name="blocks" size={13} />
               </span>
-              <span className="ws-tab-label">Design System</span>
+              <span className="ws-tab-label">{t('dsManager.tabDesignSystem')}</span>
             </button>
           ) : null}
           <button
@@ -1880,12 +1934,10 @@ export function FileWorkspace({
               const browserTitle = browserUrl
                 ? browserTab.title?.trim() || labelFromUrl(browserUrl)
                 : browserTab.label;
-              const browserMeta = browserUrl ? formatBrowserTabUrl(browserUrl) : undefined;
               return (
                 <Tab
                   key={browserTab.id}
                   label={browserTitle}
-                  meta={browserMeta}
                   title={browserUrl ? `${browserTitle}\n${browserUrl}` : browserTitle}
                   active={activeTab === browserTab.id}
                   onActivate={() => setPersistedActive(browserTab.id)}
@@ -2021,6 +2073,14 @@ export function FileWorkspace({
           launcherContext={launcherContext}
           onOpenFile={openFile}
           onOpenTab={focusWorkspaceTab}
+          onTrack={(input) =>
+            trackTabLauncherClick(analytics.track, {
+              page_name: 'file_manager',
+              area: 'tab_launcher',
+              ...(projectId ? { project_id: projectId } : {}),
+              ...input,
+            })
+          }
           onClose={() => setLauncherOpen(false)}
         />
       ) : null}
@@ -2059,6 +2119,7 @@ export function FileWorkspace({
           >
             <DesignBrowserPanel
               projectId={projectId}
+              browserTabId={browserTab.id}
               resolvedDir={resolvedDir}
               initialIconUrl={browserTab.iconUrl}
               initialTitle={browserTab.title}
@@ -2078,6 +2139,7 @@ export function FileWorkspace({
         {activeTab === QUESTIONS_TAB ? (
           <QuestionsPanel
             key={questionFormKey ?? undefined}
+            projectId={projectId}
             formKey={questionFormKey}
             form={questionForm ?? questionFormPreview}
             interactive={questionFormInteractive}
@@ -2090,54 +2152,24 @@ export function FileWorkspace({
           <DesignSystemProjectPanel
             projectId={projectId}
             system={designSystemProject}
+            brandId={designSystemBrandId}
             files={visibleFiles}
             streaming={Boolean(streaming)}
             activityEvents={designSystemActivityEvents}
             onOpenFile={openFile}
             onUploadAssets={() => fileInputRef.current?.click()}
+            onRefreshFiles={onRefreshFiles}
             defaultDesignSystemId={defaultDesignSystemId}
             onSetDefaultDesignSystem={onSetDefaultDesignSystem}
             onDesignSystemsRefresh={onDesignSystemsRefresh}
+            onDeleteDesignSystemProject={onDeleteDesignSystemProject}
             onNeedsWork={onDesignSystemNeedsWork}
             designSystemReview={designSystemReview}
             onReviewDecision={onDesignSystemReviewDecision}
             onUseDesignSystem={onUseDesignSystem}
+            editFocusRequest={designSystemEditRequest}
             onConnectRepo={onConnectRepo}
             githubConnected={githubConnected}
-          />
-        ) : showGenerationPreview && generationPreview ? (
-          <GenerationPreviewStage
-            model={generationPreview}
-            onRetry={
-              generationPreview.retryTarget && onRetry
-                ? () => onRetry(generationPreview.retryTarget!)
-                : undefined
-            }
-            onAuthorizeAndRetry={
-              generationPreview.retryTarget && onAuthorizeAndRetry
-                ? () => onAuthorizeAndRetry(generationPreview.retryTarget!)
-                : undefined
-            }
-            onLaunchTerminalAuth={onLaunchTerminalAuth}
-            amrAuthorizeSourceDetail="generation_preview_authorize_retry"
-            amrRechargeSourceDetail="generation_preview_recharge"
-            amrGuidance={
-              generationPreview.promoteAmrSwitch
-                && generationPreview.errorCode
-                && generationPreview.retryTarget
-                && onAuthorizeAndRetry ? (
-                <AmrGuidance
-                  errorCode={generationPreview.errorCode}
-                  projectId={projectId}
-                  projectKind={projectKind}
-                  conversationId={conversationId ?? null}
-                  assistantMessageId={generationPreview.retryTarget.id}
-                  runId={generationPreview.retryTarget.runId ?? null}
-                  sourceDetail="generation_preview_switch_retry_card"
-                  onActivate={() => onAuthorizeAndRetry(generationPreview.retryTarget!)}
-                />
-              ) : undefined
-            }
           />
         ) : activeTab === DESIGN_FILES_TAB ? (
           <DesignFilesPanel
@@ -2145,6 +2177,7 @@ export function FileWorkspace({
             projectId={projectId}
             rootDirName={rootDirName}
             reloading={reloading}
+            running={Boolean(streaming)}
             files={visibleFiles}
             folders={projectFolders}
             liveArtifacts={liveArtifactEntries}
@@ -2195,6 +2228,31 @@ export function FileWorkspace({
                 element: 'new_sketch',
               });
               startNewSketch();
+            }}
+            onOpenBrowser={() => {
+              trackFileManagerClick(analytics.track, {
+                page_name: 'file_manager',
+                area: 'file_manager',
+                element: 'new_browser',
+              });
+              openBrowserTab();
+            }}
+            onCreateDesignSystem={() => {
+              trackFileManagerClick(analytics.track, {
+                page_name: 'file_manager',
+                area: 'file_manager',
+                element: 'create_design_system',
+              });
+              setPendingDesignSystemCreateEntry('project_canvas');
+              navigate({ kind: 'design-system-create' });
+            }}
+            onSelectFromLibrary={() => {
+              trackFileManagerClick(analytics.track, {
+                page_name: 'file_manager',
+                area: 'file_manager',
+                element: 'library',
+              });
+              setShowLibraryPicker(true);
             }}
             uploadError={uploadError}
             onClearUploadError={() => setUploadError(null)}
@@ -2264,7 +2322,6 @@ export function FileWorkspace({
             file={activeFile}
             filesRefreshKey={filesRefreshKey}
             isDeck={isDeck}
-            onExportAsPptx={onExportAsPptx}
             streaming={streaming}
             commentQueueOnSend={commentQueueOnSend}
             commentSendDisabled={commentSendDisabled}
@@ -2279,6 +2336,11 @@ export function FileWorkspace({
             shareRequest={
               shareRequest && shareRequest.name === activeFile.name
                 ? { nonce: shareRequest.nonce }
+                : null
+            }
+            downloadRequest={
+              downloadRequest && downloadRequest.name === activeFile.name
+                ? { nonce: downloadRequest.nonce }
                 : null
             }
             slideNavRequest={deliverableSlideNavForActiveFile(
@@ -2330,6 +2392,30 @@ export function FileWorkspace({
         ) : null}
       </AnimatePresence>
       <AnimatePresence>
+        {showLibraryPicker ? (
+          <LibraryPicker
+            onClose={() => setShowLibraryPicker(false)}
+            onConfirm={async (assets) => {
+              // Copy each picked asset into the project's design files (under the
+              // folder currently in view, if any). Apply records a provenance
+              // back-link so the registry knows the asset was consumed. For
+              // element-pick captures, `includeElement` also drops the captured
+              // markup as a companion `.element.html` file so the element's text
+              // lands in Design Files alongside its screenshot.
+              const dir = uploadDir || undefined;
+              let lastRelPath: string | null = null;
+              for (const asset of assets) {
+                const res = await applyLibraryAsset(asset.id, projectId, dir, { includeElement: true });
+                if (res?.relPath) lastRelPath = res.relPath;
+                if (res?.elementRelPath) lastRelPath = res.elementRelPath;
+              }
+              await onRefreshFiles();
+              if (lastRelPath) openFile(lastRelPath);
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
+      <AnimatePresence>
         {quickSwitcherOpen ? (
           <QuickSwitcher
             projectId={projectId}
@@ -2354,31 +2440,38 @@ export function FileWorkspace({
 function DesignSystemProjectPanel({
   projectId,
   system,
+  brandId,
   files,
   streaming,
   activityEvents,
   onOpenFile,
   onUploadAssets,
+  onRefreshFiles,
   defaultDesignSystemId,
   onSetDefaultDesignSystem,
   onDesignSystemsRefresh,
+  onDeleteDesignSystemProject,
   onNeedsWork,
   designSystemReview,
   onReviewDecision,
   onUseDesignSystem,
+  editFocusRequest,
   onConnectRepo,
   githubConnected,
 }: {
   projectId: string;
   system: DesignSystemSummary;
+  brandId?: string | null;
   files: ProjectFile[];
   streaming: boolean;
   activityEvents: AgentEvent[];
   onOpenFile: (name: string) => void;
   onUploadAssets: () => void;
+  onRefreshFiles: () => Promise<void> | void;
   defaultDesignSystemId?: string | null;
-  onSetDefaultDesignSystem?: (id: string | null) => void;
+  onSetDefaultDesignSystem?: (id: string | null) => Promise<void> | void;
   onDesignSystemsRefresh?: () => Promise<void> | void;
+  onDeleteDesignSystemProject?: (id: string) => Promise<boolean> | boolean;
   onNeedsWork?: (
     sectionTitle: string,
     feedback: string,
@@ -2390,16 +2483,22 @@ function DesignSystemProjectPanel({
     decision: DesignSystemReviewDecision,
     details?: DesignSystemReviewDetails,
   ) => void;
-  onUseDesignSystem?: (id: string, title: string) => void;
+  onUseDesignSystem?: (id: string, title: string) => Promise<void> | void;
+  editFocusRequest?: DesignKitEditFocusRequest | null;
   onConnectRepo?: () => void;
   githubConnected?: boolean;
 }) {
+  const t = useT();
+  const analytics = useAnalytics();
   const [reviewDecisions, setReviewDecisions] = useState<Record<string, DesignSystemReviewDecision>>({});
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [feedbackSection, setFeedbackSection] = useState<string | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
   const [status, setStatus] = useState(system.status ?? 'draft');
   const [statusBusy, setStatusBusy] = useState(false);
+  const [defaultBusy, setDefaultBusy] = useState(false);
+  const [cardManifest, setCardManifest] = useState<DesignSystemCardManifestMap>(() => new Map());
+  const [cardManifestError, setCardManifestError] = useState<string | null>(null);
   useEffect(() => {
     setStatus(system.status ?? 'draft');
   }, [system.status]);
@@ -2410,13 +2509,301 @@ function DesignSystemProjectPanel({
     }
     setReviewDecisions(next);
   }, [designSystemReview]);
+
+  // brand.html-style kit for this design system. brand.json keeps rich assets,
+  // while DESIGN.md is the editable text/token contract rendered on top.
+  const [designMdBody, setDesignMdBody] = useState('');
+  const [savingDesignMd, setSavingDesignMd] = useState(false);
+  const [kitActionBusy, setKitActionBusy] = useState<string | null>(null);
+  // Transient feedback for kit edits (upload / refresh / reset / delete) so an
+  // action that previously fired-and-forgot now reports success or failure.
+  const [kitToast, setKitToast] = useState<{ message: string; tone: DesignKitActionFeedbackTone } | null>(null);
+  const notifyKit = useCallback(
+    (tone: DesignKitActionFeedbackTone, message: string) => setKitToast({ tone, message }),
+    [],
+  );
+  const notifyKitLoading = useCallback(
+    (label: string) => notifyKit('loading', label.endsWith('…') || label.endsWith('...') ? label : `${label}...`),
+    [notifyKit],
+  );
+  const [kitReloadKey, setKitReloadKey] = useState(0);
+  const initialDesignMdRef = useRef<string | null>(null);
+  const initialBrandJsonRef = useRef<string | null>(null);
+  const initialBrandJsonLoadedRef = useRef(false);
+  function emitDesignSystemProjectEditClick(
+    element: DesignSystemEditClickProps['element'],
+    module: DesignSystemEditClickProps['module'],
+  ) {
+    trackDesignSystemEditClick(analytics.track, {
+      page_name: 'design_system_project',
+      area: 'design_system_edit',
+      element,
+      module,
+      edit_surface: 'direct_module',
+      artifact_kind: 'design_system',
+      design_system_id: system.id,
+      project_id: projectId,
+    });
+  }
+
+  const refreshKitDependencies = useCallback(async (options?: { finalizeBrand?: boolean }) => {
+    if (options?.finalizeBrand && brandId) {
+      const outcome = await finalizeBrandProject(brandId, projectId);
+      if (!outcome.ok) throw new Error(outcome.error);
+    }
+    setKitReloadKey((k) => k + 1);
+    await Promise.all([
+      Promise.resolve(onRefreshFiles()),
+      Promise.resolve(onDesignSystemsRefresh?.()),
+    ]);
+  }, [brandId, onDesignSystemsRefresh, onRefreshFiles, projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      readDesignMd(projectId),
+      fetchProjectFileText(projectId, 'brand.json', { cache: 'no-store' }),
+    ]).then(([designMd, brandJson]) => {
+      if (cancelled) return;
+      setDesignMdBody(designMd);
+      if (initialDesignMdRef.current === null) initialDesignMdRef.current = designMd;
+      if (!initialBrandJsonLoadedRef.current) {
+        initialBrandJsonRef.current = brandJson;
+        initialBrandJsonLoadedRef.current = true;
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, kitReloadKey]);
+  const kitHost = system.provenance?.sourceUrls?.[0]
+    ? hostnameOf(system.provenance.sourceUrls[0])
+    : undefined;
+  const { uploading: kitUploading, uploadModule: kitUploadModule } = useKitModuleUpload({
+    projectId,
+    title: system.title,
+    onUploaded: (module) => {
+      setKitActionBusy(`upload:${module}`);
+      notifyKit('loading', t('ds.uploading'));
+      void refreshKitDependencies({ finalizeBrand: true })
+        .then(() => notifyKit('success', t('ds.uploadDone')))
+        .catch(() => notifyKit('error', t('ds.actionFailed')))
+        .finally(() => setKitActionBusy(null));
+    },
+    onError: () => {
+      setKitActionBusy(null);
+      notifyKit('error', t('ds.uploadFailed'));
+    },
+  });
+  const { kit } = useDesignKit({
+    designSystemId: system.id,
+    title: system.title,
+    projectId,
+    swatches: system.swatches,
+    body: designMdBody,
+    editable: true,
+    host: kitHost,
+    reloadKey: kitReloadKey,
+  });
+  async function persistDesignMd(nextBody: string) {
+    const updated = await updateDesignSystemDraft(system.id, { body: nextBody });
+    if (!updated) throw new Error(t('ds.actionFailed'));
+    const file = await writeProjectTextFile(projectId, 'DESIGN.md', nextBody);
+    if (!file) throw new Error(t('ds.actionFailed'));
+    setDesignMdBody(nextBody);
+    await refreshKitDependencies();
+  }
+
+  async function saveDesignMd(nextBody: string) {
+    if (kitActionBusy) throw new Error(t('ds.actionFailed'));
+    setSavingDesignMd(true);
+    setKitActionBusy('design-md-save');
+    notifyKit('loading', t('ds.saving'));
+    try {
+      await persistDesignMd(nextBody);
+      notifyKit('success', t('ds.actionDone'));
+    } catch (err) {
+      notifyKit('error', t('ds.actionFailed'));
+      throw err;
+    } finally {
+      setSavingDesignMd(false);
+      setKitActionBusy(null);
+    }
+  }
+
+  async function refreshKit() {
+    if (kitActionBusy) return;
+    setKitActionBusy('refresh');
+    notifyKitLoading(t('ds.refresh'));
+    try {
+      if (brandId) {
+        await refreshKitDependencies({ finalizeBrand: true });
+      } else {
+        const job = await startDesignSystemTokenContractRebuildJob(system.id, { force: true });
+        if (!job) throw new Error(t('ds.actionFailed'));
+        await refreshKitDependencies();
+      }
+      notifyKit('success', t('ds.actionDone'));
+    } catch {
+      notifyKit('error', t('ds.actionFailed'));
+    } finally {
+      setKitActionBusy(null);
+    }
+  }
+
+  async function downloadKit() {
+    if (kitActionBusy) return;
+    setKitActionBusy('download');
+    notifyKitLoading(t('ds.download'));
+    try {
+      await refreshKitDependencies({ finalizeBrand: true });
+      const ok =
+        await downloadProjectArchive({ projectId, fallbackTitle: system.title }) ||
+        await downloadDesignSystemArchive({ designSystemId: system.id, fallbackTitle: system.title });
+      if (!ok) throw new Error(t('ds.actionFailed'));
+      notifyKit('success', t('ds.actionDone'));
+    } catch {
+      notifyKit('error', t('ds.actionFailed'));
+    } finally {
+      setKitActionBusy(null);
+    }
+  }
+
+  // Delete the whole design system from the project tab's "..." menu: remove the
+  // registered design system (so it leaves the Design Systems list) AND its
+  // backing project, then exit the tab. onDeleteDesignSystemProject is App's
+  // handleDeleteProject, which deletes the project, clears local state and
+  // navigates home — so the panel unmounts on success and there's no busy reset
+  // to do in the happy path.
+  async function deleteDesignSystemProject() {
+    if (kitActionBusy || !onDeleteDesignSystemProject) return;
+    const ok = window.confirm(
+      t('ds.deleteProjectConfirm', { title: system.title }),
+    );
+    if (!ok) return;
+    setKitActionBusy('delete');
+    notifyKitLoading(t('ds.deleteProjectAction', { title: system.title }));
+    try {
+      // Delete the backing project first: this navigates home and unmounts the
+      // panel, so the tab exits cleanly instead of briefly rendering an empty
+      // design-system view. Only on success do we drop the registered design
+      // system (so the Design Systems list keeps no ghost row) and refresh that
+      // list. deleteDesignSystemDraft is a no-op (404 → false) for systems that
+      // aren't user-editable; that's fine.
+      const deleted = await onDeleteDesignSystemProject(projectId);
+      if (!deleted) {
+        notifyKit('error', t('ds.actionFailed'));
+        setKitActionBusy(null);
+        return;
+      }
+      await deleteDesignSystemDraft(system.id);
+      await onDesignSystemsRefresh?.();
+    } catch {
+      notifyKit('error', t('ds.actionFailed'));
+      setKitActionBusy(null);
+    }
+  }
+
+  async function changeKitColor(index: number, hex: string) {
+    if (kitActionBusy) throw new Error(t('ds.actionFailed'));
+    const nextHex = normalizeDesignKitHex(hex);
+    if (!nextHex) throw new Error(t('ds.invalidHexColor'));
+    setKitActionBusy('color');
+    notifyKit('loading', t('ds.saving'));
+    try {
+      const ok = await updateBrandColor(projectId, index, nextHex);
+      if (!ok) {
+        const nextBody = designMdBodyWithColor(designMdBody, kit?.colors ?? [], index, nextHex);
+        await persistDesignMd(nextBody);
+      } else {
+        await refreshKitDependencies({ finalizeBrand: true });
+      }
+      notifyKit('success', t('ds.actionDone'));
+    } catch (err) {
+      notifyKit('error', t('ds.actionFailed'));
+      throw err;
+    } finally {
+      setKitActionBusy(null);
+    }
+  }
+
+  async function resetKitColor(index: number) {
+    const originalHex = initialDesignKitColorHex(index, {
+      brandJson: initialBrandJsonRef.current,
+      designMdBody: initialDesignMdRef.current,
+      swatches: system.swatches,
+      currentColors: kit?.colors ?? [],
+    });
+    if (!originalHex) throw new Error(t('ds.noOriginalColor'));
+    await changeKitColor(index, originalHex);
+  }
+
+  async function removeKitLogo(index: number) {
+    if (kitActionBusy) return;
+    setKitActionBusy(`delete-logo:${index}`);
+    notifyKitLoading(t('ds.deleteLogo'));
+    try {
+      const ok = await deleteBrandLogo(projectId, index);
+      if (!ok) throw new Error(t('ds.actionFailed'));
+      await refreshKitDependencies({ finalizeBrand: true });
+      notifyKit('success', t('ds.actionDone'));
+    } catch {
+      notifyKit('error', t('ds.actionFailed'));
+    } finally {
+      setKitActionBusy(null);
+    }
+  }
+
+  async function removeKitImage(index: number) {
+    if (kitActionBusy) return;
+    setKitActionBusy(`delete-image:${index}`);
+    notifyKitLoading(t('ds.deleteImage', { caption: '' }).trim());
+    try {
+      const ok = await deleteBrandImage(projectId, index);
+      if (!ok) throw new Error(t('ds.actionFailed'));
+      await refreshKitDependencies({ finalizeBrand: true });
+      notifyKit('success', t('ds.actionDone'));
+    } catch {
+      notifyKit('error', t('ds.actionFailed'));
+    } finally {
+      setKitActionBusy(null);
+    }
+  }
+
   const allFileNames = files.map((file) => file.name);
   const fileByName = new Map(files.map((file) => [file.name, file]));
+  const manifestFile = files.find((file) => normalizeDesignSystemPath(file.name) === '_ds_manifest.json');
+  const manifestFileName = manifestFile?.name ?? null;
+  const manifestCacheBustKey = manifestFile ? Math.round(manifestFile.mtime) : null;
+  const manifestReadFailedLabel = t('ds.manifestReadFailed');
+  useEffect(() => {
+    if (!system.id || !manifestFileName || manifestCacheBustKey === null) {
+      setCardManifest((current) => (current.size === 0 ? current : new Map()));
+      setCardManifestError((current) => (current === null ? current : null));
+      return undefined;
+    }
+    let cancelled = false;
+    void fetchProjectFileText(projectId, manifestFileName, {
+      cache: 'no-store',
+      cacheBustKey: manifestCacheBustKey,
+    }).then((text) => {
+      if (cancelled) return;
+      setCardManifest(parseDesignSystemCardManifest(text));
+      setCardManifestError(null);
+    }).catch((err: unknown) => {
+      if (cancelled) return;
+      setCardManifest(new Map());
+      setCardManifestError(err instanceof Error ? err.message : manifestReadFailedLabel);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [manifestCacheBustKey, manifestFileName, manifestReadFailedLabel, projectId, system.id]);
   const fontFiles = allFileNames.filter((name) =>
     /\.(otf|ttf|woff|woff2)$/i.test(name) || name.toLowerCase().includes('/fonts/'),
   );
   const githubEvidence = designSystemGithubEvidenceState(system, allFileNames);
-  const sections = buildDesignSystemReviewSections(allFileNames, fileByName);
+  const sections = buildDesignSystemReviewSections(allFileNames, fileByName, cardManifest);
   const published = status === 'published';
   const isDefault = published && defaultDesignSystemId === system.id;
   // Strip a trailing "design system" from the title so the heading
@@ -2444,13 +2831,14 @@ function DesignSystemProjectPanel({
     return {
       section,
       previewFile,
+      previewDisplay: designSystemReviewPreviewDisplay(section, previewFile),
       reviewEntry,
       sectionActivity,
       changedAfterFeedback,
       sectionStatus,
-      sectionStatusLabel: designSystemSectionStatusLabel(section, sectionStatus, sectionActivity),
+      sectionStatusLabel: designSystemSectionStatusLabel(t, section, sectionStatus, sectionActivity),
       reviewTimeLabel: reviewEntry?.updatedAt
-        ? designSystemReviewTimeLabel(reviewEntry.updatedAt)
+        ? designSystemReviewTimeLabel(t, reviewEntry.updatedAt)
         : null,
     };
   });
@@ -2458,27 +2846,56 @@ function DesignSystemProjectPanel({
   const visibleSectionReviews = streaming && !published && generationReviewHasStarted
     ? sectionReviews.filter((item) => designSystemSectionVisibleDuringGeneration(item))
     : sectionReviews;
-  const needsReviewSectionReviews = visibleSectionReviews.filter(designSystemReviewNeedsAttention);
-  const primaryNeedsReview = needsReviewSectionReviews.slice(0, 1);
   const groupedSectionReviews = designSystemReviewGroups(visibleSectionReviews);
+  const reviewTocGroups = groupedSectionReviews
+    .map((group) => ({
+      title: group.title,
+      items: group.items.map((item) => ({
+        id: `design-system-section-${slugForTestId(`${group.title}:${item.section.title}`)}`,
+        label: item.section.title,
+        statusClass: designSystemSectionStatusClass(item.sectionStatus),
+        statusLabel: item.sectionStatusLabel,
+      })),
+    }))
+    .filter((group) => group.items.length > 0);
   const creatingInitialDraft = streaming && !published;
   const generationSteps = designSystemInitialGenerationSteps({
     files,
     sectionReviews,
     system,
+    t,
   });
   const generationProgress = designSystemGenerationProgress(generationSteps);
 
   async function togglePublished(nextPublished: boolean) {
     if (nextPublished && !githubEvidence.ready) return;
     setStatusBusy(true);
+    notifyKitLoading(publishActionLabel);
     try {
       const nextStatus = nextPublished ? 'published' : 'draft';
       const updated = await updateDesignSystemDraft(system.id, { status: nextStatus });
-      if (updated) setStatus(updated.status ?? nextStatus);
+      if (!updated) throw new Error(t('ds.actionFailed'));
+      setStatus(updated.status ?? nextStatus);
       await onDesignSystemsRefresh?.();
+      notifyKit('success', t('ds.actionDone'));
+    } catch {
+      notifyKit('error', t('ds.actionFailed'));
     } finally {
       setStatusBusy(false);
+    }
+  }
+
+  async function toggleDefault(nextDefault: boolean) {
+    if (!onSetDefaultDesignSystem) return;
+    setDefaultBusy(true);
+    notifyKitLoading(nextDefault ? t('dsManager.makeDefault') : t('dsManager.badgeDefault'));
+    try {
+      await onSetDefaultDesignSystem(nextDefault ? system.id : null);
+      notifyKit('success', t('ds.actionDone'));
+    } catch {
+      notifyKit('error', t('ds.actionFailed'));
+    } finally {
+      setDefaultBusy(false);
     }
   }
 
@@ -2502,9 +2919,9 @@ function DesignSystemProjectPanel({
     }));
   }
 
-  function openNeedsWorkFeedback(sectionTitle: string) {
+  function openNeedsWorkFeedback(sectionTitle: string, expansionKey: string) {
     setReviewDecisions((current) => ({ ...current, [sectionTitle]: 'needs-work' }));
-    setExpandedSections((current) => ({ ...current, [sectionTitle]: true }));
+    setExpandedSections((current) => ({ ...current, [expansionKey]: true }));
     setFeedbackSection(sectionTitle);
     setFeedbackText('');
   }
@@ -2541,8 +2958,7 @@ function DesignSystemProjectPanel({
     // default to show it is done. Gate that on the current status, not just the
     // stored decision: when a section is regenerated after approval its status
     // moves back to needs-attention, and it has to reopen so the "review again"
-    // notice and the review buttons (both rendered only while expanded) stay
-    // visible. Without the needsAttention guard a stale "looks-good" decision
+    // notice and regenerated preview stay visible. Without the needsAttention guard a stale "looks-good" decision
     // keeps the regenerated section collapsed and the change is easy to miss.
     // The user can still re-expand with the chevron (expandedSections[instanceId]),
     // and an active agent run forces it open.
@@ -2550,12 +2966,17 @@ function DesignSystemProjectPanel({
       !needsAttention && (reviewDecisions[section.title] ?? reviewEntry?.decision) === 'looks-good';
     const expanded =
       (expandedSections[instanceId] ?? (defaultExpanded && !reviewedGood)) || sectionActivity.running;
+    const sectionSlug = slugForTestId(instanceId);
+    const sectionAnchorId = `design-system-section-${sectionSlug}`;
+    const editableFile = designSystemSectionEditableFile(section, previewFile, fileByName);
     return (
       <section
+        id={sectionAnchorId}
         key={instanceId}
         className={[
           'ds-project-section',
           'ds-project-review-item',
+          `ds-project-review-item--${item.previewDisplay}`,
           expanded ? 'is-expanded' : 'is-collapsed',
         ].join(' ')}
       >
@@ -2569,7 +2990,7 @@ function DesignSystemProjectPanel({
             type="button"
             className="ds-project-section-head-trigger"
             aria-expanded={expanded}
-            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${section.title}`}
+            aria-label={t(expanded ? 'ds.reviewCollapseSection' : 'ds.reviewExpandSection', { title: section.title })}
             onClick={() => toggleSection(instanceId)}
           />
           <span className="ds-project-section-title">
@@ -2588,92 +3009,102 @@ function DesignSystemProjectPanel({
                 aria-label={sectionStatusLabel}
                 title={sectionStatusLabel}
               >
-                {needsAttention ? 'Needs review' : 'Looks good'}
+                {needsAttention ? t('ds.reviewNeedsReview') : t('ds.reviewLooksGood')}
               </span>
             ) : null}
           </span>
-          {expanded ? (
-            <div className="ds-project-review-actions" aria-label={`${section.title} review`}>
+          <div className="ds-project-review-actions" aria-label={t('ds.reviewActionsLabel', { title: section.title })}>
+            <button
+              type="button"
+              className={`ghost success ${reviewDecisions[section.title] === 'looks-good' ? 'active' : ''}`}
+              data-testid={`design-system-review-good-${slugForTestId(section.title)}`}
+              onClick={() => {
+                markSectionReview(section.title, 'looks-good');
+                // Collapse on validate, overriding any manual expand so the
+                // section always tidies away once it is marked good.
+                setExpandedSections((current) => ({ ...current, [instanceId]: false }));
+              }}
+            >
+              <Icon name="check" size={13} />
+              {t('ds.reviewLooksGood')}
+            </button>
+            <button
+              type="button"
+              className={`ghost danger ${reviewDecisions[section.title] === 'needs-work' ? 'active' : ''}`}
+              data-testid={`design-system-review-work-${slugForTestId(section.title)}`}
+              onClick={() => openNeedsWorkFeedback(section.title, instanceId)}
+            >
+              <Icon name="comment" size={13} />
+              {t('ds.reviewNeedsWorkEllipsis')}
+            </button>
+            {editableFile ? (
               <button
                 type="button"
-                className={`ghost success ${reviewDecisions[section.title] === 'looks-good' ? 'active' : ''}`}
-                data-testid={`design-system-review-good-${slugForTestId(section.title)}`}
-                onClick={() => {
-                  markSectionReview(section.title, 'looks-good');
-                  // Collapse on validate, overriding any manual expand so the
-                  // section always tidies away once it is marked good.
-                  setExpandedSections((current) => ({ ...current, [instanceId]: false }));
+                className="ghost compact"
+                data-testid={`design-system-review-edit-${sectionSlug}`}
+                title={t('ds.reviewEditFile', { file: editableFile.name })}
+                onClick={() => onOpenFile(editableFile.name)}
+              >
+                <Icon name="edit" size={13} />
+                {t('common.edit')}
+              </button>
+            ) : null}
+            {feedbackSection === section.title ? (
+              <form
+                className="ds-project-feedback-popover"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitNeedsWorkFeedback(section.title, section.files);
                 }}
               >
-                <Icon name="check" size={13} />
-                Looks good
-              </button>
-              <button
-                type="button"
-                className={`ghost danger ${reviewDecisions[section.title] === 'needs-work' ? 'active' : ''}`}
-                data-testid={`design-system-review-work-${slugForTestId(section.title)}`}
-                onClick={() => openNeedsWorkFeedback(section.title)}
-              >
-                <Icon name="comment" size={13} />
-                Needs work...
-              </button>
-              {feedbackSection === section.title ? (
-                <form
-                  className="ds-project-feedback-popover"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    submitNeedsWorkFeedback(section.title, section.files);
-                  }}
-                >
-                  <label htmlFor={`ds-feedback-${slugForTestId(section.title)}`}>
-                    Tell the agent what to change
-                  </label>
-                  <textarea
-                    id={`ds-feedback-${slugForTestId(section.title)}`}
-                    value={feedbackText}
-                    rows={3}
-                    placeholder={`e.g. tighten spacing in ${section.title}, regenerate this preview...`}
-                    onChange={(event) => setFeedbackText(event.target.value)}
-                    autoFocus
-                  />
-                  <div>
-                    <button
-                      type="button"
-                      className="ghost compact"
-                      onClick={() => {
-                        setFeedbackSection(null);
-                        setFeedbackText('');
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="primary compact"
-                      disabled={!feedbackText.trim()}
-                    >
-                      Send
-                    </button>
-                  </div>
-                </form>
+                <label htmlFor={`ds-feedback-${slugForTestId(section.title)}`}>
+                  {t('ds.reviewFeedbackLabel')}
+                </label>
+                <textarea
+                  id={`ds-feedback-${slugForTestId(section.title)}`}
+                  value={feedbackText}
+                  rows={3}
+                  placeholder={t('ds.reviewFeedbackPlaceholder', { title: section.title })}
+                  onChange={(event) => setFeedbackText(event.target.value)}
+                  autoFocus
+                />
+                <div>
+                  <button
+                    type="button"
+                    className="ghost compact"
+                    onClick={() => {
+                      setFeedbackSection(null);
+                      setFeedbackText('');
+                    }}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    className="primary compact"
+                    disabled={!feedbackText.trim()}
+                  >
+                    {t('chat.send')}
+                  </button>
+                </div>
+              </form>
               ) : null}
-            </div>
-          ) : null}
+          </div>
         </div>
         {expanded ? (
           <div className="ds-project-section-body">
             {sectionActivity.running ? (
               <div className="ds-project-review-notice is-running">
                 <Icon name="sparkles" size={14} />
-                <span>{designSystemSectionRunningNotice(section, sectionActivity)}</span>
+                <span>{designSystemSectionRunningNotice(t, section, sectionActivity)}</span>
               </div>
             ) : changedAfterFeedback || sectionActivity.mutated ? (
               <div className="ds-project-review-notice">
                 <Icon name="check" size={14} />
                 <span>
                   {changedAfterFeedback
-                    ? 'This section changed after your feedback. Review it again before publishing.'
-                    : 'This section changed during the latest run. Review it before publishing.'}
+                    ? t('ds.reviewChangedAfterFeedback')
+                    : t('ds.reviewChangedDuringRun')}
                 </span>
               </div>
             ) : null}
@@ -2681,10 +3112,10 @@ function DesignSystemProjectPanel({
               <div className="ds-project-last-feedback">
                 <Icon name="comment" size={14} />
                 <span>
-                  <strong>Last feedback</strong>
+                  <strong>{t('ds.reviewLastFeedback')}</strong>
                   <small>{reviewEntry.feedback}</small>
                   {reviewEntry.agentTask ? (
-                    <small>{designSystemReviewAgentTaskLabel(reviewEntry.agentTask)}</small>
+                    <small>{designSystemReviewAgentTaskLabel(t, reviewEntry.agentTask)}</small>
                   ) : null}
                 </span>
               </div>
@@ -2696,7 +3127,7 @@ function DesignSystemProjectPanel({
             ) : (
               <div className="ds-project-preview-placeholder">
                 <Icon name="sparkles" size={16} />
-                <span>Generating preview...</span>
+                <span>{t('ds.previewGenerating')}</span>
               </div>
             )}
           </div>
@@ -2708,157 +3139,376 @@ function DesignSystemProjectPanel({
   if (creatingInitialDraft) {
     return (
       <div className="ds-project-panel ds-project-panel--generating">
-        <div className="ds-project-generation-stage">
-          <span className="ds-project-generation-mark">
-            <Icon name="blocks" size={24} />
-          </span>
-          <h1>Creating your design system...</h1>
-          <p>Keep this tab open. You can come back in a few minutes.</p>
-          <div
-            className="ds-project-generation-progress"
-            role="progressbar"
-            aria-label={`Design system generation progress ${generationProgress}%`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={generationProgress}
-          >
-            <span style={{ width: `${generationProgress}%` }} />
-          </div>
-        </div>
+        <DesignSystemProjectLoading
+          kicker={t('dsManager.tabDesignSystem')}
+          title={t('ds.creatingProjectTitle')}
+          subtitle={t('ds.creatingProjectSubtitle')}
+          progress={generationProgress}
+          progressLabel={t('ds.generationProgressLabel', { progress: generationProgress })}
+        />
       </div>
     );
   }
 
-  return (
-    <div className="ds-project-panel">
-      <div className="ds-project-main ds-project-main--review">
-        <div className="ds-project-head ds-project-head--review">
-          <h1>
-            {published
-              ? `${systemDisplayName} design system`
-              : `Review ${systemDisplayName} design system`}
-          </h1>
-          <div className="ds-project-publish-card__toggles">
-            {/* The publish button is disabled until the GitHub import evidence is
-                ready, and a disabled button never fires the hover or focus that
-                surfaces a `title` tooltip. Keep the guidance on this wrapper,
-                which is never disabled, and let pointer events fall through the
-                disabled button to it (see .ds-project-publish-trigger) so the
-                explanation stays reachable exactly when publishing is blocked. */}
-            <span
-              className="ds-project-publish-trigger"
-              title={
-                !published && !githubEvidence.ready
-                  ? 'Finish importing your GitHub repo before you can publish.'
-                  : undefined
-              }
-            >
-              <button
-                type="button"
-                className={published ? 'ghost compact' : 'primary'}
-                data-testid="design-system-publish"
-                disabled={statusBusy || (!published && !githubEvidence.ready)}
-                onClick={() => void togglePublished(!published)}
-              >
-                {published ? <Icon name="check" size={14} /> : null}
-                {published ? 'Published' : 'Publish'}
-              </button>
-            </span>
-            {published ? (
-              <label>
-                <input
-                  type="checkbox"
-                  checked={isDefault}
-                  disabled={statusBusy}
-                  onChange={(event) => {
-                    onSetDefaultDesignSystem?.(event.target.checked ? system.id : null);
-                  }}
-                />
-                Default
-              </label>
-            ) : null}
-          </div>
-        </div>
+  // Scaffolding kept around the brand.html kit: publish / default controls in
+  // the kit header, and the publish card + repo / font / manifest warnings above
+  // the modules. The Looks-good / Needs-work review flow is intentionally gone
+  // here — the kit is the single, on-brand view of the system.
+  // The publish lifecycle button stays a visible primary; everything else
+  // (asset refresh/download/reset and the chat-default toggle) folds into the
+  // header's "More" dropdown so the sticky row reads as one clear action.
+  const repoCopy = repoConnectCopy(t, githubConnected);
+  const publishActionLabel = published ? t('ds.unpublishDesignSystem') : t('ds.publishDesignSystem');
+  const actionsSlot = (
+    <span
+      className="ds-project-publish-trigger"
+      title={
+        !published && !githubEvidence.ready
+          ? t('ds.publishRepoRequiredTitle')
+          : undefined
+      }
+    >
+      <button
+        type="button"
+        className={published ? 'ghost compact' : 'primary'}
+        data-testid="design-system-publish"
+        aria-label={publishActionLabel}
+        title={publishActionLabel}
+        disabled={statusBusy || (!published && !githubEvidence.ready)}
+        aria-busy={statusBusy || undefined}
+        onClick={() => void togglePublished(!published)}
+      >
+        <Icon name={statusBusy ? 'spinner' : published ? 'check' : 'arrow-up'} size={14} />
+        {published ? t('ds.published') : t('ds.publish')}
+      </button>
+    </span>
+  );
 
-        <div className="ds-project-publish-card ds-project-publish-card--review">
-          <p>
-            {published
-              ? "Your team's new projects can use this design system as context by default."
-              : 'Your design system is ready, but your feedback will improve it. Publish it when it is ready to use in future projects.'}
-          </p>
-          {published ? (
-            <div className="ds-project-use-row">
-              <span>Use this system</span>
-              <Button
-                variant="ghost"
-                className="compact"
-                onClick={() => onUseDesignSystem?.(system.id, system.title)}
-              >
-                <Icon name="external-link" size={13} />
-                New design
-              </Button>
-            </div>
-          ) : null}
-        </div>
+  const headerMenuActions: HeaderMenuAction[] = [
+    {
+      id: 'refresh',
+      label: t('ds.refresh'),
+      icon: 'refresh',
+      onClick: () => {
+        emitDesignSystemProjectEditClick('kit_refresh', 'kit');
+        void refreshKit();
+      },
+      disabled: Boolean(kitActionBusy) || statusBusy || defaultBusy,
+      loading: kitActionBusy === 'refresh',
+    },
+    {
+      id: 'download',
+      label: t('dsManager.downloadTitle'),
+      icon: 'download',
+      onClick: () => {
+        emitDesignSystemProjectEditClick('kit_download', 'kit');
+        void downloadKit();
+      },
+      disabled: Boolean(kitActionBusy) || statusBusy || defaultBusy,
+      loading: kitActionBusy === 'download',
+    },
+    ...(published && onSetDefaultDesignSystem
+      ? [
+          {
+            id: 'default',
+            label: isDefault ? t('dsManager.badgeDefault') : t('dsManager.makeDefault'),
+            icon: (isDefault ? 'check' : 'star') as IconName,
+            onClick: () => void toggleDefault(!isDefault),
+            disabled: statusBusy || defaultBusy || Boolean(kitActionBusy),
+            loading: defaultBusy,
+            active: isDefault,
+          } satisfies HeaderMenuAction,
+        ]
+      : []),
+    ...(onDeleteDesignSystemProject
+      ? [
+          {
+            id: 'delete',
+            label: t('ds.deleteProjectAction', { title: system.title }),
+            icon: 'trash' as IconName,
+            onClick: () => void deleteDesignSystemProject(),
+            disabled: Boolean(kitActionBusy) || statusBusy || defaultBusy,
+            loading: kitActionBusy === 'delete',
+          } satisfies HeaderMenuAction,
+        ]
+      : []),
+  ];
 
-        {!githubEvidence.ready ? (
-          <div className="ds-project-warning-card">
-            <Icon name="github" size={16} />
+  const topSlot = (
+    <>
+      <div
+        className={`ds-project-extraction-status ${streaming ? 'is-running' : 'is-complete'}`}
+        role="status"
+        data-testid="design-system-extraction-status"
+      >
+        <Icon name={streaming ? 'sparkles' : 'check'} size={15} />
+        <span>
+          <strong>{streaming ? t('ds.extractionRunningTitle') : t('ds.extractionCompleteTitle')}</strong>
+          <small>
+            {streaming
+              ? t('ds.extractionRunningBody')
+              : t('ds.extractionCompleteBody')}
+          </small>
+        </span>
+      </div>
+
+      <div className="ds-project-publish-card ds-project-publish-card--review">
+        <p>
+          {published
+            ? t('ds.publishCardPublished')
+            : t('ds.publishCardDraft')}
+        </p>
+        {published ? (
+          <div className="ds-project-use-row">
             <span>
-              <strong>{repoConnectCopy(githubConnected).bannerTitle}</strong>
-              <small>{repoConnectCopy(githubConnected).bannerBody}</small>
+              <strong>{t('ds.useSystemTitle')}</strong>
+              <small>
+                {t('ds.useSystemBody')}
+              </small>
             </span>
-            {onConnectRepo ? (
-              <Button
-                variant="ghost"
-                className="compact"
-                disabled={githubConnected === undefined}
-                onClick={onConnectRepo}
-              >
-                <Icon name="github" size={13} />
-                {repoConnectCopy(githubConnected).buttonLabel}
-              </Button>
-            ) : githubEvidence.hasSourceManifest ? (
-              <Button variant="ghost" className="compact" onClick={() => onOpenFile('context/source-context.md')}>
-                <Icon name="file" size={13} />
-                Open source context
-              </Button>
-            ) : null}
+            <Button
+              variant="primary"
+              onClick={() => onUseDesignSystem?.(system.id, system.title)}
+              disabled={!onUseDesignSystem}
+            >
+              <Icon name="plus" size={14} />
+              {t('ds.createNewDesign')}
+            </Button>
           </div>
         ) : null}
+      </div>
 
-        {fontFiles.length === 0 ? (
-          <MissingBrandFontsBanner projectId={projectId} onUploadAssets={onUploadAssets} />
-        ) : null}
-
-        <div className="ds-project-sections">
-          {primaryNeedsReview.length > 0 ? (
-            <div className="ds-project-section-group">
-              {primaryNeedsReview.map((item, index) =>
-                renderReviewCard(item, `needs-review:${item.section.title}`, index === 0),
-              )}
-            </div>
-          ) : null}
-
-          {groupedSectionReviews.map((group) => (
-            <div key={group.title} className="ds-project-section-group">
-              <h2>{group.title}</h2>
-              {group.items.map((item) =>
-                renderReviewCard(item, `${group.title}:${item.section.title}`, Boolean(item.previewFile)),
-              )}
-            </div>
-          ))}
-
-          {visibleSectionReviews.length === 0 ? (
-            <div className="ds-project-empty-review">
-              <Icon name="sparkles" size={18} />
-              <span>Preview cards will appear here as the agent creates them.</span>
-            </div>
+      {!githubEvidence.ready ? (
+        <div className="ds-project-warning-card">
+          <Icon name="github" size={16} />
+          <span>
+            <strong>{repoCopy.bannerTitle}</strong>
+            <small>{repoCopy.bannerBody}</small>
+          </span>
+          {onConnectRepo ? (
+            <Button
+              variant="ghost"
+              className="compact"
+              disabled={githubConnected === undefined}
+              onClick={onConnectRepo}
+            >
+              <Icon name="github" size={13} />
+              {repoCopy.buttonLabel}
+            </Button>
+          ) : githubEvidence.hasSourceManifest ? (
+            <Button variant="ghost" className="compact" onClick={() => onOpenFile('context/source-context.md')}>
+              <Icon name="file" size={13} />
+              {t('ds.openSourceContext')}
+            </Button>
           ) : null}
         </div>
+      ) : null}
+
+      {fontFiles.length === 0 ? (
+        <MissingBrandFontsBanner projectId={projectId} onUploadAssets={onUploadAssets} />
+      ) : null}
+
+      {cardManifestError ? (
+        <div
+          className="ds-project-warning-card ds-project-warning-card--error"
+          data-testid="design-system-manifest-error"
+          role="alert"
+        >
+          <Icon name="alert-triangle" size={16} />
+          <span>
+            <strong>{t('ds.manifestNeedsAttention')}</strong>
+            <small>{cardManifestError}</small>
+          </span>
+          {manifestFileName ? (
+            <Button variant="ghost" className="compact" onClick={() => onOpenFile(manifestFileName)}>
+              <Icon name="file" size={13} />
+              {t('ds.openManifest')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+    </>
+  );
+
+  return (
+    <div className="ds-project-panel ds-project-panel--kit" data-testid="design-system-project-tab-panel">
+      {kitToast ? (
+        <Toast
+          message={kitToast.message}
+          tone={kitToast.tone}
+          ttlMs={kitToast.tone === 'loading' ? 60000 : 2600}
+          role={kitToast.tone === 'error' ? 'alert' : 'status'}
+          onDismiss={() => setKitToast(null)}
+        />
+      ) : null}
+      {kit ? (
+        <DesignKitView
+          kit={kit}
+          actionsSlot={actionsSlot}
+          headerMenuActions={headerMenuActions}
+          topSlot={topSlot}
+          stickyHeader
+          designMd={{
+            body: designMdBody,
+            onSave: saveDesignMd,
+            onOpenFile: () => onOpenFile('DESIGN.md'),
+            saving: savingDesignMd,
+            canEdit: true,
+          }}
+          onUploadModule={kitUploadModule}
+          onColorChange={(index, hex) => changeKitColor(index, hex)}
+          onColorReset={(index) => resetKitColor(index)}
+          onDeleteLogo={(index) => void removeKitLogo(index)}
+          onDeleteImage={(index) => void removeKitImage(index)}
+          onRefresh={() => void refreshKit()}
+          onDownload={() => void downloadKit()}
+          onEditClick={emitDesignSystemProjectEditClick}
+          uploading={kitUploading}
+          actionBusy={kitActionBusy}
+          onActionFeedback={notifyKit}
+          editFocusRequest={editFocusRequest}
+          dataTestId="design-system-project-kit"
+        />
+      ) : (
+        <DesignSystemProjectLoading
+          kicker={t('dsManager.tabDesignSystem')}
+          title={systemDisplayName}
+          subtitle={t('ds.workspacePreparing')}
+          progressLabel={t('ds.workspaceLoadingLabel')}
+        />
+      )}
+    </div>
+  );
+}
+
+function DesignSystemProjectLoading({
+  kicker,
+  title,
+  subtitle,
+  progress,
+  progressLabel,
+}: {
+  kicker: string;
+  title: string;
+  subtitle: string;
+  progress?: number;
+  progressLabel: string;
+}) {
+  const hasProgress = typeof progress === 'number' && Number.isFinite(progress);
+  const clampedProgress = hasProgress
+    ? Math.max(0, Math.min(100, Math.round(progress)))
+    : undefined;
+  return (
+    <div className="ds-project-loading-stage" role="status" aria-live="polite">
+      <div className="ds-project-loading-emblem" aria-hidden="true">
+        <span className="ds-project-loading-emblem__grid" />
+        <span className="ds-project-loading-mark">
+          <Icon name="blocks" size={28} />
+        </span>
+      </div>
+      <div className="ds-project-loading-copy">
+        <span className="ds-project-loading-kicker">{kicker}</span>
+        <h1>{title}</h1>
+        <p>{subtitle}</p>
+      </div>
+      <div
+        className={`ds-project-loading-progress ${hasProgress ? 'is-determinate' : 'is-indeterminate'}`}
+        role="progressbar"
+        aria-label={progressLabel}
+        aria-valuemin={hasProgress ? 0 : undefined}
+        aria-valuemax={hasProgress ? 100 : undefined}
+        aria-valuenow={clampedProgress}
+      >
+        <span style={hasProgress ? { width: `${clampedProgress}%` } : undefined} />
+      </div>
+      <div className="ds-project-loading-skeleton" aria-hidden="true">
+        <span />
+        <span />
+        <span />
       </div>
     </div>
   );
+}
+
+function normalizeDesignKitHex(value: string): string | null {
+  const trimmed = value.trim();
+  const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+  if (/^#[0-9a-fA-F]{6}$/.test(withHash)) return withHash.toUpperCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(withHash)) {
+    return `#${withHash[1]}${withHash[1]}${withHash[2]}${withHash[2]}${withHash[3]}${withHash[3]}`.toUpperCase();
+  }
+  return null;
+}
+
+function initialDesignKitColorHex(
+  index: number,
+  sources: {
+    brandJson: string | null;
+    designMdBody: string | null;
+    swatches: string[] | undefined;
+    currentColors: KitColor[];
+  },
+): string | null {
+  const brandColor = colorHexFromBrandJson(sources.brandJson, index);
+  if (brandColor) return brandColor;
+  const designMdColor = colorHexFromDesignMd(sources.designMdBody ?? '', index);
+  if (designMdColor) return designMdColor;
+  return normalizeDesignKitHex(sources.swatches?.[index] ?? sources.currentColors[index]?.hex ?? '');
+}
+
+function colorHexFromBrandJson(raw: string | null, index: number): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { colors?: Array<{ hex?: unknown }> };
+    const hex = parsed.colors?.[index]?.hex;
+    return typeof hex === 'string' ? normalizeDesignKitHex(hex) : null;
+  } catch {
+    return null;
+  }
+}
+
+function colorHexFromDesignMd(body: string, index: number): string | null {
+  if (!body.trim()) return null;
+  return normalizeDesignKitHex(parseDesignMd(body).colors[index]?.hex ?? '');
+}
+
+function designMdBodyWithColor(
+  body: string,
+  colors: KitColor[],
+  index: number,
+  hex: string,
+): string {
+  const replaced = replaceDesignMdColorAtIndex(body, index, hex);
+  if (replaced) return replaced;
+  const nextColors = colors.length > 0
+    ? colors.map((color, colorIndex) => ({
+        ...color,
+        hex: colorIndex === index ? hex : color.hex,
+      }))
+    : [];
+  while (nextColors.length <= index) {
+    nextColors.push({
+      role: `color-${nextColors.length + 1}`,
+      name: `Color ${nextColors.length + 1}`,
+      hex: nextColors.length === index ? hex : '#000000',
+      usage: '',
+    });
+  }
+  if (nextColors[index]) {
+    nextColors[index] = { ...nextColors[index], hex };
+  }
+  const table = [
+    '## Color Palette',
+    '',
+    '| Role | Name | Hex | Usage |',
+    '| --- | --- | --- | --- |',
+    ...nextColors.map((color, colorIndex) => {
+      const role = color.role || `color-${colorIndex + 1}`;
+      const name = color.name || role;
+      return `| ${role} | ${name} | \`${normalizeDesignKitHex(color.hex) ?? '#000000'}\` | ${color.usage || ''} |`;
+    }),
+  ].join('\n');
+  return `${body.trimEnd()}\n\n${table}\n`;
 }
 
 function designSystemHasSourceContext(system: DesignSystemSummary): boolean {
@@ -2879,6 +3529,19 @@ function slugForTestId(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+function designSystemSectionEditableFile(
+  section: DesignSystemProjectSection,
+  previewFile: ProjectFile | null,
+  fileByName: Map<string, ProjectFile>,
+): ProjectFile | null {
+  if (previewFile && (previewFile.kind === 'html' || previewFile.kind === 'sketch')) return previewFile;
+  const htmlFile = section.files
+    .map((name) => fileByName.get(name))
+    .find((file) => file?.kind === 'html');
+  if (htmlFile) return htmlFile;
+  return previewFile ?? section.files.map((name) => fileByName.get(name)).find(Boolean) ?? null;
+}
+
 function designSystemSectionPreviewFile(
   names: string[],
   fileByName: Map<string, ProjectFile>,
@@ -2894,6 +3557,7 @@ function designSystemSectionPreviewFile(
 function buildDesignSystemReviewSections(
   names: string[],
   fileByName: Map<string, ProjectFile>,
+  cardManifest: DesignSystemCardManifestMap = new Map(),
 ): DesignSystemProjectSection[] {
   const artifactNames = names
     .filter((name) => isDesignSystemReviewArtifactFile(name, fileByName))
@@ -2901,11 +3565,12 @@ function buildDesignSystemReviewSections(
   if (artifactNames.length > 0) {
     const reviewNames = preferPreviewArtifactsOverRawAssets(artifactNames);
     return reviewNames.map((name) => {
-      const title = designSystemReviewTitleFromPath(name);
-      const category = inferDesignSystemReviewCategory(name, title);
+      const manifestEntry = cardManifest.get(normalizeDesignSystemPath(name));
+      const title = manifestEntry?.name?.trim() || designSystemReviewTitleFromPath(name);
+      const category = inferDesignSystemReviewCategory(name, title, manifestEntry);
       return {
         title,
-        subtitle: designSystemReviewSubtitle(title, category),
+        subtitle: manifestEntry?.subtitle?.trim() || designSystemReviewSubtitle(title, category, name),
         category,
         files: designSystemRelatedFilesForCategory(name, category, names),
       };
@@ -2939,19 +3604,25 @@ function isDesignSystemReviewArtifactFile(
   if (!file || isDesignSystemEvidenceFile(path) || path === 'metadata.json') return false;
   const isRenderable = file.kind === 'html' || file.kind === 'image' || file.kind === 'sketch';
   if (!isRenderable) return false;
+  if (isDesignSystemRawAssetFile(path)) return isDesignSystemReviewableAssetArtifact(path);
   if (path === 'index.html') return true;
   if (path.startsWith('preview/') || path.includes('/preview/')) return true;
-  if (path.startsWith('ui_kits/') || path.includes('/ui_kits/')) return true;
-  if (
-    path.startsWith('assets/')
+  if (isDesignSystemUiKitFile(path)) return true;
+  return false;
+}
+
+function isDesignSystemRawAssetFile(path: string): boolean {
+  return path.startsWith('assets/')
     || path.startsWith('src/assets/')
     || path.startsWith('public/')
     || path.includes('/assets/')
-    || path.includes('/logos/')
-  ) {
-    return /\b(brand|logo|mark|icon)\b/u.test(path) || DESIGN_SYSTEM_IMAGE_OR_FONT_EXTENSIONS.test(path);
-  }
-  return false;
+    || path.includes('/src/assets/')
+    || path.includes('/fonts/')
+    || path.includes('/logos/');
+}
+
+function isDesignSystemReviewableAssetArtifact(path: string): boolean {
+  return /\b(brand|logo|logos|mark|wordmark|icon)\b/u.test(path);
 }
 
 function designSystemReviewArtifactSort(first: string, second: string): number {
@@ -2976,25 +3647,37 @@ function designSystemReviewTitleFromPath(name: string): string {
     || 'overview';
 }
 
-function inferDesignSystemReviewCategory(name: string, title: string): DesignSystemReviewCategory {
+function inferDesignSystemReviewCategory(
+  name: string,
+  title: string,
+  manifestEntry?: DesignSystemCardManifestEntry,
+): DesignSystemReviewCategory {
   const text = `${normalizeDesignSystemPath(name)} ${title}`.toLowerCase();
+  const group = manifestEntry?.group?.toLowerCase() ?? '';
+  if (group.includes('ui kit')) return 'Components';
   if (/\b(type|typography|font|text)\b/u.test(text)) return 'Type';
   if (/\b(color|colors|palette|theme)\b/u.test(text)) return 'Colors';
-  if (/\b(space|spacing|radius|layout-grid)\b/u.test(text)) return 'Spacing';
-  if (/\b(brand|logo|logos|mark|wordmark|icon)\b/u.test(text)) return 'Brand';
+  if (/\b(space|spacing|radius|radii|shadow|shadows|elevation|layout-grid)\b/u.test(text)) return 'Spacing';
+  if (/\b(brand|logo|logos|mark|wordmark|icon|favicon)\b/u.test(text)) return 'Brand';
+  if (group.includes('brand')) return 'Brand';
   return 'Components';
 }
 
-function designSystemReviewSubtitle(title: string, category: DesignSystemReviewCategory): string {
-  const text = title.toLowerCase();
+function designSystemReviewSubtitle(title: string, category: DesignSystemReviewCategory, name = ''): string {
+  const path = normalizeDesignSystemPath(name);
+  const titleText = title.toLowerCase();
+  const text = `${title} ${path}`.toLowerCase();
+  if (isDesignSystemUiKitEntryPage(path)) return 'Applied UI kit example';
   if (text.includes('typography')) return 'Text hierarchy and styles';
+  if (text.includes('type-')) return 'Typography scale and font guidance';
   if (text.includes('font')) return 'Font family specimens';
   if (text.includes('node')) return 'Data type color coding system';
   if (text.includes('ui-palette') || text.includes('palette')) return 'Interface color palette';
   if (text.includes('dark')) return 'Dark theme color palette';
-  if (text.includes('spacing') || text.includes('radius')) return 'Spacing scale and border radius tokens';
+  if (text.includes('spacing') || text.includes('radius') || text.includes('radii') || text.includes('shadow')) return 'Spacing scale and border radius tokens';
+  if (text.includes('favicon')) return 'Brand app icon and favicon';
   if (text.includes('logo') || text.includes('brand')) return 'Brand logo marks';
-  if (text.includes('interface') || text.includes('ui')) return 'Interface and component patterns';
+  if (titleText.includes('interface') || titleText.includes('ui')) return 'Interface and component patterns';
   switch (category) {
     case 'Type':
       return 'Typography scale and font guidance';
@@ -3007,6 +3690,77 @@ function designSystemReviewSubtitle(title: string, category: DesignSystemReviewC
     case 'Components':
       return 'Reusable product interface examples';
   }
+}
+
+function isDesignSystemUiKitEntryPage(path: string): boolean {
+  return isDesignSystemUiKitFile(path) && /\.html?$/iu.test(path);
+}
+
+function designSystemManifestCardError(index: number, detail: string): Error {
+  const separator = detail.startsWith('.') ? '' : ' ';
+  return new Error(`Invalid _ds_manifest.json: cards[${index}]${separator}${detail}.`);
+}
+
+function optionalDesignSystemManifestString(
+  record: Record<string, unknown>,
+  field: (typeof DESIGN_SYSTEM_CARD_MANIFEST_OPTIONAL_STRING_FIELDS)[number],
+  index: number,
+): string | undefined {
+  const value = record[field];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') throw designSystemManifestCardError(index, `.${field} must be a string`);
+  return value;
+}
+
+function parseDesignSystemCardManifestEntry(card: unknown, index: number): DesignSystemCardManifestEntry {
+  if (!card || typeof card !== 'object' || Array.isArray(card)) {
+    throw designSystemManifestCardError(index, 'must be an object');
+  }
+  const record = card as Record<string, unknown>;
+  if (typeof record.path !== 'string' || !record.path.trim()) {
+    throw designSystemManifestCardError(index, '.path must be a non-empty string');
+  }
+  const entry: DesignSystemCardManifestEntry = { path: normalizeDesignSystemPath(record.path) };
+  for (const field of DESIGN_SYSTEM_CARD_MANIFEST_OPTIONAL_STRING_FIELDS) {
+    entry[field] = optionalDesignSystemManifestString(record, field, index);
+  }
+  return entry;
+}
+
+function parseDesignSystemCardManifest(text: string | null): DesignSystemCardManifestMap {
+  if (!text) return new Map();
+  let parsed: { cards?: unknown };
+  try {
+    parsed = JSON.parse(text) as { cards?: unknown };
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`Invalid _ds_manifest.json: ${detail}`);
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Invalid _ds_manifest.json: expected an object with a cards array.');
+  }
+  if (parsed.cards !== undefined && !Array.isArray(parsed.cards)) {
+    throw new Error('Invalid _ds_manifest.json: cards must be an array.');
+  }
+  const cards = Array.isArray(parsed.cards) ? parsed.cards : [];
+  const entries: Array<[string, DesignSystemCardManifestEntry]> = [];
+  for (const [index, card] of cards.entries()) {
+    const entry = parseDesignSystemCardManifestEntry(card, index);
+    entries.push([entry.path, entry]);
+  }
+  return new Map(entries);
+}
+
+function designSystemReviewPreviewDisplay(
+  section: DesignSystemProjectSection,
+  previewFile: ProjectFile | null,
+): DesignSystemReviewPreviewDisplay {
+  if (!previewFile) return 'specimen';
+  const path = normalizeDesignSystemPath(previewFile.name);
+  if (path.startsWith('ui_kits/') || path.includes('/ui_kits/')) return 'ui-kit';
+  if (previewFile.kind !== 'html') return 'asset';
+  if (section.category === 'Components' && !path.startsWith('preview/')) return 'ui-kit';
+  return 'specimen';
 }
 
 function designSystemRelatedFilesForCategory(
@@ -3154,6 +3908,7 @@ function isDesignSystemPreviewFile(name: string): boolean {
 function isDesignSystemUiKitFile(name: string): boolean {
   const path = normalizeDesignSystemPath(name);
   if (isDesignSystemEvidenceFile(path)) return false;
+  if (isDesignSystemRawAssetFile(path)) return false;
   return path.startsWith('ui_kits/')
     || path.startsWith('src/components/')
     || path.startsWith('components/')
@@ -3215,25 +3970,28 @@ function designSystemSectionStatus(
 }
 
 function designSystemSectionStatusLabel(
+  t: TranslateFn,
   section: DesignSystemProjectSection,
   status: DesignSystemSectionStatus,
   activity: DesignSystemSectionActivity,
 ): string {
   switch (status) {
     case 'running':
-      return designSystemSectionPhaseLabel(section, activity);
+      return designSystemSectionPhaseLabel(t, section, activity);
     case 'planned':
-      return 'Queued';
+      return t('ds.sectionQueued');
     case 'updated':
-      return 'Review updated files';
+      return t('ds.sectionReviewUpdatedFiles');
     case 'approved':
-      return 'Looks good';
+      return t('ds.reviewLooksGood');
     case 'needs-work':
-      return 'Needs work';
+      return t('ds.reviewNeedsWork');
     case 'needs-review':
-      return 'Needs review';
+      return t('ds.reviewNeedsReview');
     case 'missing':
-      return section.requiredFile ? `${section.requiredFile} missing` : 'No files yet';
+      return section.requiredFile
+        ? t('ds.sectionRequiredFileMissing', { file: section.requiredFile })
+        : t('ds.sectionNoFilesYet');
   }
 }
 
@@ -3260,10 +4018,12 @@ function designSystemInitialGenerationSteps({
   files,
   sectionReviews,
   system,
+  t,
 }: {
   files: ProjectFile[];
   sectionReviews: DesignSystemProjectSectionReview[];
   system: DesignSystemSummary;
+  t: TranslateFn;
 }): DesignSystemGenerationStep[] {
   const hasSourceContext =
     designSystemGithubEvidenceState(system, files.map((file) => file.name)).ready
@@ -3283,14 +4043,14 @@ function designSystemInitialGenerationSteps({
   const steps: DesignSystemGenerationStep[] = [
     {
       id: 'source-context',
-      title: 'Explore provided resources',
-      detail: 'Company context, GitHub repositories, local code folders, Figma files, fonts, logos, and notes.',
+      title: t('ds.generationSourceTitle'),
+      detail: t('ds.generationSourceDetail'),
       status: hasSourceContext ? 'succeeded' : 'running',
     },
     {
       id: 'guidance',
-      title: 'Create DESIGN.md',
-      detail: 'Canonical guidance used as project context.',
+      title: t('ds.generationGuidanceTitle'),
+      detail: t('ds.generationGuidanceDetail'),
       status: fileNames.some(isDesignSystemGuidanceFile)
         ? 'succeeded'
         : guidanceRunning
@@ -3299,8 +4059,8 @@ function designSystemInitialGenerationSteps({
     },
     {
       id: 'tokens',
-      title: 'Create tokens',
-      detail: 'Color, type, spacing, and radius evidence.',
+      title: t('ds.generationTokensTitle'),
+      detail: t('ds.generationTokensDetail'),
       status: fileNames.some(isDesignSystemTokenFile)
         ? 'succeeded'
         : (categoryIsRunning('Type') || categoryIsRunning('Colors') || categoryIsRunning('Spacing'))
@@ -3309,8 +4069,8 @@ function designSystemInitialGenerationSteps({
     },
     {
       id: 'previews',
-      title: 'Create preview cards',
-      detail: 'HTML review cards for the Design System tab.',
+      title: t('ds.generationPreviewsTitle'),
+      detail: t('ds.generationPreviewsDetail'),
       status: sectionReviews.some((review) => review.previewFile)
         ? 'succeeded'
         : (categoryIsRunning('Type') || categoryIsRunning('Colors') || categoryIsRunning('Spacing') || categoryIsRunning('Brand'))
@@ -3319,8 +4079,8 @@ function designSystemInitialGenerationSteps({
     },
     {
       id: 'ui-kit',
-      title: 'Create UI kit',
-      detail: 'Reusable interface examples.',
+      title: t('ds.generationUiKitTitle'),
+      detail: t('ds.generationUiKitDetail'),
       status: categoryHasReview('Components') || fileNames.some(isDesignSystemUiKitFile)
         ? 'succeeded'
         : categoryIsRunning('Components')
@@ -3329,8 +4089,8 @@ function designSystemInitialGenerationSteps({
     },
     {
       id: 'assets',
-      title: 'Register assets',
-      detail: 'Logos, icons, fonts, and brand files.',
+      title: t('ds.generationAssetsTitle'),
+      detail: t('ds.generationAssetsDetail'),
       status: categoryHasReview('Brand') || fileNames.some(isDesignSystemAssetFile)
         ? 'succeeded'
         : categoryIsRunning('Brand')
@@ -3550,69 +4310,79 @@ function designSystemBasename(path: string): string {
 }
 
 function designSystemSectionPhaseLabel(
+  t: TranslateFn,
   section: DesignSystemProjectSection,
   activity: DesignSystemSectionActivity,
 ): string {
   if (activity.phase === 'planned') {
     switch (section.category) {
       case 'Type':
-        return 'Queued typography';
+        return t('ds.phaseQueuedTypography');
       case 'Colors':
-        return 'Queued tokens';
+        return t('ds.phaseQueuedTokens');
       case 'Spacing':
-        return 'Queued spacing';
+        return t('ds.phaseQueuedSpacing');
       case 'Components':
-        return 'Queued UI kit';
+        return t('ds.phaseQueuedUiKit');
       case 'Brand':
-        return 'Queued assets';
+        return t('ds.phaseQueuedAssets');
     }
   }
   if (activity.phase === 'reading') {
     switch (section.category) {
       case 'Type':
-        return 'Reading typography';
+        return t('ds.phaseReadingTypography');
       case 'Colors':
-        return 'Reading tokens';
+        return t('ds.phaseReadingTokens');
       case 'Spacing':
-        return 'Reading spacing';
+        return t('ds.phaseReadingSpacing');
       case 'Components':
-        return 'Reading UI kit';
+        return t('ds.phaseReadingUiKit');
       case 'Brand':
-        return 'Reading assets';
+        return t('ds.phaseReadingAssets');
     }
   }
   if (activity.phase === 'writing') {
     switch (section.category) {
       case 'Type':
-        return 'Writing typography';
+        return t('ds.phaseWritingTypography');
       case 'Colors':
-        return 'Writing tokens';
+        return t('ds.phaseWritingTokens');
       case 'Spacing':
-        return 'Writing spacing';
+        return t('ds.phaseWritingSpacing');
       case 'Components':
-        return 'Building UI kit';
+        return t('ds.phaseBuildingUiKit');
       case 'Brand':
-        return 'Updating assets';
+        return t('ds.phaseUpdatingAssets');
     }
   }
-  if (activity.phase === 'error') return 'Needs attention';
-  if (activity.phase === 'updated') return 'Updated';
-  return 'Needs review';
+  if (activity.phase === 'error') return t('ds.phaseNeedsAttention');
+  if (activity.phase === 'updated') return t('ds.phaseUpdated');
+  return t('ds.reviewNeedsReview');
 }
 
 function designSystemSectionActivityLabel(
+  t: TranslateFn,
   section: DesignSystemProjectSection,
   activity: DesignSystemSectionActivity,
 ): string {
   if (activity.touchedFiles.length === 0) {
+    const phaseLabel = designSystemSectionPhaseLabel(t, section, activity);
     return activity.todoText
-      ? `${designSystemSectionPhaseLabel(section, activity)} from todo: ${truncateDesignSystemActivityText(activity.todoText)}`
-      : designSystemSectionPhaseLabel(section, activity);
+      ? t('ds.sectionActivityFromTodo', {
+          phase: phaseLabel,
+          todo: truncateDesignSystemActivityText(activity.todoText),
+        })
+      : phaseLabel;
   }
   const label = activity.touchedFiles.slice(0, 3).join(', ');
   const suffix = activity.touchedFiles.length > 3 ? ` +${activity.touchedFiles.length - 3}` : '';
-  if (activity.phase === 'idle') return `Read ${label}${suffix}`;
-  return `${designSystemSectionPhaseLabel(section, activity)} ${label}${suffix}`;
+  const files = `${label}${suffix}`;
+  if (activity.phase === 'idle') return t('ds.sectionActivityReadFiles', { files });
+  return t('ds.sectionActivityPhaseFiles', {
+    phase: designSystemSectionPhaseLabel(t, section, activity),
+    files,
+  });
 }
 
 function truncateDesignSystemActivityText(value: string): string {
@@ -3621,40 +4391,51 @@ function truncateDesignSystemActivityText(value: string): string {
 }
 
 function designSystemSectionRunningNotice(
+  t: TranslateFn,
   section: DesignSystemProjectSection,
   activity: DesignSystemSectionActivity,
 ): string {
   if (activity.phase === 'reading') {
-    return `Open Design is reading ${section.title} context for this section.`;
+    return t('ds.sectionRunningReadingContext', { title: section.title });
   }
-  return `${designSystemSectionPhaseLabel(section, activity)} now.`;
+  return t('ds.sectionRunningNow', { phase: designSystemSectionPhaseLabel(t, section, activity) });
 }
 
-function designSystemReviewTimeLabel(value: string): string | null {
+function designSystemReviewTimeLabel(t: TranslateFn, value: string): string | null {
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return null;
-  return `Last reviewed ${new Intl.DateTimeFormat('en', {
+  const formatted = new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-  }).format(new Date(time))}`;
+  }).format(new Date(time));
+  return t('ds.reviewLastReviewed', { time: formatted });
 }
 
-function designSystemReviewAgentTaskLabel(task: DesignSystemReviewAgentTask): string {
+function designSystemReviewAgentTaskLabel(t: TranslateFn, task: DesignSystemReviewAgentTask): string {
   switch (task.status) {
     case 'queued':
-      return 'Feedback saved. The agent will pick it up when the current run finishes.';
+      return t('ds.agentFeedbackQueued');
     case 'sent':
-      if (!task.sentAt) return 'Sent to agent.';
+      if (!task.sentAt) return t('ds.agentFeedbackSent');
       {
-        const label = designSystemReviewTimeLabel(task.sentAt)?.replace('Last reviewed', '').trim();
-        return label ? `Sent to agent ${label}.` : 'Sent to agent.';
+        const time = Date.parse(task.sentAt);
+        if (!Number.isFinite(time)) return t('ds.agentFeedbackSent');
+        const formatted = new Intl.DateTimeFormat(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        }).format(new Date(time));
+        return t('ds.agentFeedbackSentAt', { time: formatted });
       }
     case 'failed':
-      return task.error ? `Agent task failed: ${task.error}` : 'Agent task failed.';
+      return task.error
+        ? t('ds.agentFeedbackFailedWithError', { error: task.error })
+        : t('ds.agentFeedbackFailed');
   }
-  return 'Agent task status unknown.';
+  return t('ds.agentFeedbackUnknown');
 }
 
 function designSystemSectionChangedAfterReview(
@@ -3682,13 +4463,247 @@ function DesignSystemInlinePreview({
   file: ProjectFile;
 }) {
   const url = projectFileUrl(projectId, file.name);
+  const [srcDoc, setSrcDoc] = useState<string | null>(null);
+  const [srcDocReady, setSrcDocReady] = useState(false);
+
+  useEffect(() => {
+    setSrcDoc(null);
+    setSrcDocReady(false);
+    if (file.kind !== 'html') return undefined;
+    let cancelled = false;
+    void fetchProjectFileText(projectId, file.name, {
+      cache: 'no-store',
+      cacheBustKey: Math.round(file.mtime),
+    }).then(async (html) => {
+      if (cancelled) return;
+      if (!html) {
+        setSrcDocReady(true);
+        return;
+      }
+      const inlinedHtml = await inlineDesignSystemPreviewRelativeAssets(html, projectId, file.name);
+      if (cancelled) return;
+      setSrcDoc(buildSrcdoc(inlinedHtml, {
+        baseHref: projectRawUrl(projectId, baseDirForDesignSystemPreviewFile(file.name)),
+      }));
+      setSrcDocReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file.kind, file.mtime, file.name, projectId]);
+
   if (file.kind === 'html') {
-    return <iframe title={file.name} src={url} sandbox="allow-scripts" />;
+    return (
+      <iframe
+        title={file.name}
+        src={srcDocReady && srcDoc ? undefined : url}
+        srcDoc={srcDoc ?? undefined}
+        sandbox="allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox"
+      />
+    );
   }
   return <img src={`${url}?v=${Math.round(file.mtime)}`} alt={file.name} />;
 }
 
+async function inlineDesignSystemPreviewRelativeAssets(
+  html: string,
+  projectId: string,
+  ownerFileName: string,
+): Promise<string> {
+  const replacements: Array<Promise<{ from: string; to: string } | null>> = [];
+  const links = html.match(/<link\b[^>]*>/gi) ?? [];
+  for (const tag of links) {
+    const rel = readDesignSystemPreviewHtmlAttr(tag, 'rel');
+    const href = readDesignSystemPreviewHtmlAttr(tag, 'href');
+    if (!rel || !/\bstylesheet\b/i.test(rel) || !href) continue;
+    const stylesheetPath = resolveDesignSystemPreviewRelativePath(ownerFileName, href);
+    if (!stylesheetPath) continue;
+    replacements.push(fetchProjectFileText(projectId, stylesheetPath, { cache: 'no-store' }).then((css) => {
+      if (css == null) return null;
+      const safeCss = rewriteDesignSystemPreviewCssUrls(css, projectId, stylesheetPath)
+        .replace(/<\/style/gi, '<\\/style');
+      return {
+        from: tag,
+        to: [
+          `<style data-od-inline-asset="${escapeDesignSystemPreviewAttr(href)}">`,
+          safeCss,
+          '</style>',
+        ].join('\n'),
+      };
+    }));
+  }
 
+  const scripts = html.match(/<script\b[^>]*\bsrc\s*=\s*["'][^"']+["'][^>]*>\s*<\/script>/gi) ?? [];
+  for (const tag of scripts) {
+    const src = readDesignSystemPreviewHtmlAttr(tag, 'src');
+    if (!src) continue;
+    replacements.push(fetchDesignSystemPreviewRelativeText(projectId, ownerFileName, src).then((js) => {
+      if (js == null) return null;
+      const open = tag.match(/^<script\b[^>]*>/i)?.[0] ?? '<script>';
+      const attrs = open
+        .replace(/^<script/i, '')
+        .replace(/>$/i, '')
+        .replace(/\ssrc\s*=\s*(['"])[\s\S]*?\1/i, '');
+      return {
+        from: tag,
+        to: [
+          `<script${attrs} data-od-inline-asset="${escapeDesignSystemPreviewAttr(src)}">`,
+          js.replace(/<\/script/gi, '<\\/script'),
+          '</script>',
+        ].join('\n'),
+      };
+    }));
+  }
+
+  const resolved = (await Promise.all(replacements)).filter(
+    (replacement): replacement is { from: string; to: string } => replacement !== null,
+  );
+  const withInlineAssets = resolved.reduce(
+    (next, replacement) => next.replace(replacement.from, () => replacement.to),
+    html,
+  );
+  const withInlineCssAssets = rewriteDesignSystemPreviewInlineCssAssetUrls(withInlineAssets, projectId, ownerFileName);
+  return rewriteDesignSystemPreviewHtmlAssetUrls(withInlineCssAssets, projectId, ownerFileName);
+}
+
+async function fetchDesignSystemPreviewRelativeText(
+  projectId: string,
+  ownerFileName: string,
+  assetRef: string,
+): Promise<string | null> {
+  const filePath = resolveDesignSystemPreviewRelativePath(ownerFileName, assetRef);
+  if (!filePath) return null;
+  return fetchProjectFileText(projectId, filePath, { cache: 'no-store' });
+}
+
+type DesignSystemPreviewAssetPath = {
+  filePath: string;
+  suffix: string;
+};
+
+function resolveDesignSystemPreviewRelativePath(ownerFileName: string, assetRef: string): string | null {
+  return resolveDesignSystemPreviewAssetPath(ownerFileName, assetRef)?.filePath ?? null;
+}
+
+function resolveDesignSystemPreviewAssetPath(ownerFileName: string, assetRef: string): DesignSystemPreviewAssetPath | null {
+  const ref = assetRef.trim();
+  if (/^(?:https?:|data:|blob:|mailto:|tel:|#)/i.test(ref)) return null;
+  if (isDesignSystemPreviewAppRootRef(ref)) return null;
+  try {
+    const url = new URL(ref, `https://od.local/${baseDirForDesignSystemPreviewFile(ownerFileName)}`);
+    if (url.origin !== 'https://od.local') return null;
+    return {
+      filePath: decodeURIComponent(url.pathname.replace(/^\/+/, '')),
+      suffix: `${url.search}${url.hash}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isDesignSystemPreviewAppRootRef(ref: string): boolean {
+  if (!ref.startsWith('/') || ref.startsWith('//')) return false;
+  const pathOnly = ref.split(/[?#]/, 1)[0]?.toLowerCase() ?? '';
+  return pathOnly === '/api'
+    || pathOnly.startsWith('/api/')
+    || pathOnly === '/artifacts'
+    || pathOnly.startsWith('/artifacts/')
+    || pathOnly === '/frames'
+    || pathOnly.startsWith('/frames/');
+}
+
+function rewriteDesignSystemPreviewCssUrls(css: string, projectId: string, stylesheetFileName: string): string {
+  return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (match, _quote: string, rawRef: string) => {
+    const ref = rawRef.trim();
+    const assetPath = resolveDesignSystemPreviewAssetPath(stylesheetFileName, ref);
+    if (!assetPath) return match;
+    return `url("${escapeDesignSystemPreviewCssUrl(projectRawUrl(projectId, assetPath.filePath) + assetPath.suffix)}")`;
+  });
+}
+
+function rewriteDesignSystemPreviewHtmlAssetUrls(html: string, projectId: string, ownerFileName: string): string {
+  const directAssetTags = new RegExp(
+    '(<(?:img|source|video|audio|track|embed|object|image|use)\\b[^>]*?\\s' +
+      '(?:src|poster|data|href|xlink:href)\\s*=\\s*)([\'"])([\\s\\S]*?)\\2',
+    'gi',
+  );
+  const withDirectAssets = html.replace(directAssetTags, (match, prefix: string, quote: string, rawRef: string) => {
+    const rewritten = rewriteDesignSystemPreviewHtmlAssetRef(rawRef, projectId, ownerFileName);
+    if (rewritten === rawRef) return match;
+    return `${prefix}${quote}${escapeDesignSystemPreviewAttr(rewritten)}${quote}`;
+  });
+  const srcsetAssetTags = new RegExp(
+    '(<(?:img|source)\\b[^>]*?\\ssrcset\\s*=\\s*)([\'"])([\\s\\S]*?)\\2',
+    'gi',
+  );
+  return withDirectAssets.replace(srcsetAssetTags, (match, prefix: string, quote: string, rawSrcset: string) => {
+    const rewritten = rewriteDesignSystemPreviewSrcset(rawSrcset, projectId, ownerFileName);
+    if (rewritten === rawSrcset) return match;
+    return `${prefix}${quote}${escapeDesignSystemPreviewAttr(rewritten)}${quote}`;
+  });
+}
+
+function rewriteDesignSystemPreviewInlineCssAssetUrls(html: string, projectId: string, ownerFileName: string): string {
+  const withStyleBlocks = html.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (
+    match,
+    attrs: string,
+    css: string,
+  ) => {
+    const rewritten = rewriteDesignSystemPreviewCssUrls(css, projectId, ownerFileName);
+    if (rewritten === css) return match;
+    return `<style${attrs}>${rewritten}</style>`;
+  });
+  return withStyleBlocks.replace(/(\sstyle\s*=\s*)(['"])([\s\S]*?)\2/gi, (
+    match,
+    prefix: string,
+    quote: string,
+    css: string,
+  ) => {
+    const rewritten = rewriteDesignSystemPreviewCssUrls(css, projectId, ownerFileName);
+    if (rewritten === css) return match;
+    return `${prefix}${quote}${escapeDesignSystemPreviewAttr(rewritten)}${quote}`;
+  });
+}
+
+function rewriteDesignSystemPreviewHtmlAssetRef(ref: string, projectId: string, ownerFileName: string): string {
+  const assetPath = resolveDesignSystemPreviewAssetPath(ownerFileName, ref.trim());
+  return assetPath ? projectRawUrl(projectId, assetPath.filePath) + assetPath.suffix : ref;
+}
+
+function rewriteDesignSystemPreviewSrcset(srcset: string, projectId: string, ownerFileName: string): string {
+  if (/\bdata:/i.test(srcset)) return srcset;
+  return srcset
+    .split(',')
+    .map((candidate) => {
+      const match = candidate.trim().match(/^(\S+)(\s+.+)?$/);
+      if (!match) return candidate;
+      const rewritten = rewriteDesignSystemPreviewHtmlAssetRef(match[1] ?? '', projectId, ownerFileName);
+      return `${rewritten}${match[2] ?? ''}`;
+    })
+    .join(', ');
+}
+
+function baseDirForDesignSystemPreviewFile(name: string): string {
+  const index = name.lastIndexOf('/');
+  return index >= 0 ? name.slice(0, index + 1) : '';
+}
+
+function readDesignSystemPreviewHtmlAttr(tag: string, name: string): string | null {
+  const match = tag.match(new RegExp(`\\s${name}\\s*=\\s*(['"])([\\s\\S]*?)\\1`, 'i'));
+  return match?.[2] ?? null;
+}
+
+function escapeDesignSystemPreviewAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeDesignSystemPreviewCssUrl(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\a ');
+}
 
 function Tab({
   label,
@@ -3737,8 +4752,10 @@ function Tab({
     <div
       className={[
         'ws-tab',
+        'od-tooltip',
         meta ? 'has-meta' : '',
         kind === 'live-artifact' ? 'live-artifact-tab' : '',
+        kind === 'browser' ? 'browser-tab' : '',
         active ? 'active' : '',
         draggable ? 'draggable' : '',
         dragging ? 'dragging' : '',
@@ -3755,6 +4772,8 @@ function Tab({
       aria-selected={active}
       tabIndex={0}
       title={tabTitle}
+      data-tooltip={tabTitle}
+      data-tooltip-placement="bottom"
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
       onDragOver={draggable ? onDragOver : undefined}

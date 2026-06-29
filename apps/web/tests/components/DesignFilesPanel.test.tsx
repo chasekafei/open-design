@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
 
 import { DesignFilesPanel, type DesignFilesNavState } from '../../src/components/DesignFilesPanel';
 import type { ProjectFile, ProjectFileKind, ProjectFolder } from '../../src/types';
+import { VISUAL_STABILITY_STORAGE_KEY } from '../../src/utils/visualStability';
 
 function folder(path: string): ProjectFolder {
   return { name: path.split('/').pop() ?? path, path, type: 'dir', size: 0, mtime: 1700000000 };
@@ -19,6 +20,10 @@ vi.stubGlobal('localStorage', {
   setItem: (key: string, value: string) => { lsStore.set(key, value); },
   removeItem: (key: string) => { lsStore.delete(key); },
   clear: () => { lsStore.clear(); },
+});
+
+beforeEach(() => {
+  lsStore.clear();
 });
 
 function extForKind(kind: ProjectFileKind): string {
@@ -120,6 +125,26 @@ describe('DesignFilesPanel sections', () => {
     expect(screen.getByTestId('design-files-upload-trigger')).toBeTruthy();
   });
 
+  it('shows prioritized project starter actions in the empty state', () => {
+    const onNewSketch = vi.fn();
+    const onOpenBrowser = vi.fn();
+    const onCreateDesignSystem = vi.fn();
+
+    renderPanel([], {
+      onNewSketch,
+      onOpenBrowser,
+      onCreateDesignSystem,
+    });
+
+    fireEvent.click(screen.getByTestId('design-files-empty-new-sketch'));
+    fireEvent.click(screen.getByTestId('design-files-empty-open-browser'));
+    fireEvent.click(screen.getByTestId('design-files-empty-create-design-system'));
+
+    expect(onNewSketch).toHaveBeenCalledTimes(1);
+    expect(onOpenBrowser).toHaveBeenCalledTimes(1);
+    expect(onCreateDesignSystem).toHaveBeenCalledTimes(1);
+  });
+
   it('groups files into semantic sections by category', () => {
     renderPanel([
       file({ name: 'page.html', kind: 'html', mime: 'text/html' }),
@@ -157,11 +182,23 @@ describe('DesignFilesPanel sections', () => {
     expect(row.textContent).not.toContain('KB');
   });
 
-  it('renders a static useful-info footer', () => {
+  it('shows the upload hint in the footer while idle', () => {
     renderPanel([file({ name: 'page.html', kind: 'html' })]);
 
+    expect(document.querySelector('.df-drop-hint')).toBeTruthy();
+    expect(document.querySelector('.df-useful-info')).toBeNull();
+  });
+
+  it('types out the first useful-info tip in the footer while the agent runs', async () => {
+    localStorage.setItem(VISUAL_STABILITY_STORAGE_KEY, '1');
+    renderPanel([file({ name: 'page.html', kind: 'html' })], { running: true });
+
+    expect(document.querySelector('.df-drop-hint')).toBeNull();
     expect(document.querySelector('.df-useful-info-label')?.textContent).toBe('Useful info');
-    expect(document.querySelector('.df-useful-info-tip')?.textContent).toContain('Double-click');
+    // The tip types in character by character, so wait for the first word.
+    await waitFor(() =>
+      expect(document.querySelector('.df-useful-info-tip')?.textContent).toContain('Double-click'),
+    );
   });
 });
 
@@ -339,7 +376,7 @@ describe('DesignFilesPanel directory navigation', () => {
     renderPanel([file({ name: 'top.html', kind: 'html' })]);
 
     expect(document.querySelector('.df-breadcrumbs')).toBeTruthy();
-    expect(document.querySelector('.df-breadcrumb-current')?.textContent).toBe('project');
+    expect(document.querySelector('.df-breadcrumb-current')?.textContent).toBe('Project');
   });
 
   it('shows rootDirName as the root breadcrumb when one is provided', () => {

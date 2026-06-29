@@ -1,3 +1,5 @@
+import type { ReleaseChannel } from "@open-design/release";
+
 export const OPEN_DESIGN_HOST_GLOBAL = "__od__";
 export const OPEN_DESIGN_HOST_VERSION = 2;
 
@@ -126,7 +128,7 @@ export type OpenDesignHostUpdaterState =
   (typeof OPEN_DESIGN_HOST_UPDATER_STATES)[keyof typeof OPEN_DESIGN_HOST_UPDATER_STATES];
 
 export type OpenDesignHostUpdaterMode = "js-incremental" | "package-launcher";
-export type OpenDesignHostUpdaterChannel = "beta" | "nightly" | "preview" | "stable";
+export type OpenDesignHostUpdaterChannel = ReleaseChannel;
 
 export type OpenDesignHostUpdaterActionOptions = {
   payload?: Record<string, unknown>;
@@ -170,7 +172,12 @@ export type OpenDesignHostUpdaterErrorSnapshot = {
 };
 
 export type OpenDesignHostUpdaterInstallResult = {
+  activeVersion?: string;
+  artifactPath?: string;
   dryRun?: boolean;
+  helperLogPath?: string;
+  launcherRuntimePath?: string;
+  launchPath?: string;
   openedAt: string;
   path: string;
 };
@@ -199,12 +206,41 @@ export type OpenDesignHostUpdaterIncomingSnapshot = {
   version: string;
 };
 
+export type OpenDesignHostUpdaterCacheLifecycleTrigger = "cold-start" | "next-version-ready";
+
+export type OpenDesignHostUpdaterReleaseLifecycleState =
+  | "cleanup-deferred"
+  | "cleanup-removed"
+  | "deprecated"
+  | "retained"
+  | "unknown";
+
+export type OpenDesignHostUpdaterCacheLifecycleSummary = {
+  lastRunAt?: string;
+  lastTrigger?: OpenDesignHostUpdaterCacheLifecycleTrigger;
+  platform: string;
+  releases: {
+    cleanupDeferred: number;
+    cleanupRemoved: number;
+    deprecated: number;
+    errors: number;
+    retained: number;
+    total: number;
+    unknown: number;
+  };
+};
+
+export type OpenDesignHostUpdaterCacheSnapshot = {
+  lifecycle?: OpenDesignHostUpdaterCacheLifecycleSummary;
+};
+
 export type OpenDesignHostUpdaterStatusSnapshot = {
   active?: OpenDesignHostUpdaterReleaseSnapshot;
   arch: string;
   artifact?: OpenDesignHostUpdaterArtifactSnapshot;
   artifactUrl?: string;
   availableVersion?: string;
+  cache?: OpenDesignHostUpdaterCacheSnapshot;
   capabilities: OpenDesignHostUpdaterCapabilitySet;
   channel: OpenDesignHostUpdaterChannel;
   checksum?: OpenDesignHostUpdaterChecksumSnapshot;

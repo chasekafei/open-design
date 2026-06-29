@@ -5,12 +5,13 @@ import {
   SIDECAR_SOURCES,
   type SidecarStamp,
 } from "@open-design/sidecar-proto";
+import { parseLauncherAfterQuitArgs } from "@open-design/launcher-proto";
 import {
   bootstrapSidecarRuntime,
   createSidecarLaunchEnv,
   resolveAppIpcPath,
 } from "@open-design/sidecar";
-import { applyOsLocaleSwitch, createSplashWindow } from "@open-design/desktop/main";
+import { applyOsLocaleSwitch, createSplashWindow, setSplashStage } from "@open-design/desktop/main";
 import { readProcessStamp } from "@open-design/platform";
 import { join } from "node:path";
 import { app, dialog } from "electron";
@@ -18,6 +19,8 @@ import { app, dialog } from "electron";
 import { readPackagedConfig } from "./config.js";
 import { writePackagedDesktopIdentity } from "./identity.js";
 import { PackagedPathAccessError } from "./errors.js";
+import { inspectExistingDesktopForLauncher, waitForLauncherAfterQuit } from "./launcher-after-quit.js";
+import { confirmPackagedLauncherRuntime, resolvePackagedLauncherRuntime } from "./launcher-runtime.js";
 import {
   applyPackagedElectronPathOverrides,
   claimPackagedSingleInstanceLock,
@@ -31,10 +34,29 @@ import {
 import { resolvePackagedNamespacePaths } from "./paths.js";
 import { packagedEntryUrl, registerOdProtocol } from "./protocol.js";
 import { startPackagedSidecars } from "./sidecars.js";
+import { reportStartupFailure, resolveStartupDistinctId } from "./startup-telemetry.js";
+import { resolvePackagedWindowTitle } from "./window-title.js";
+import { syncWindowsUninstallDisplayVersion } from "./windows-lifecycle.js";
 
 let packagedLogger: PackagedDesktopLogger | null = null;
 let pendingSecondInstanceFocus = false;
 let showExistingDesktop: (() => void) | null = null;
+
+// Telemetry context for the fatal-exit path. Populated once config + launcher
+// runtime are resolved so the `main().catch` below can report a startup failure
+// even though the daemon (the PostHog host) never came up. Null until then —
+// failures earlier than config resolution simply skip telemetry. See
+// `startup-telemetry.ts` for the zero-startup-side-effect contract.
+let startupTelemetryContext:
+  | {
+      posthogKey: string | null;
+      posthogHost: string | null;
+      appVersion: string | null;
+      namespace: string;
+      source: string;
+      installationRoot: string;
+    }
+  | null = null;
 
 function createPackagedDesktopStamp(namespace: string): SidecarStamp {
   return {
@@ -62,6 +84,12 @@ function applyLaunchEnv(base: string, stamp: SidecarStamp): void {
   }
 }
 
+function applyPackagedUpdaterEnv(updateMetadataUrl: string | null): void {
+  if (updateMetadataUrl == null) return;
+  if (process.env.OD_UPDATE_METADATA_URL != null && process.env.OD_UPDATE_METADATA_URL.length > 0) return;
+  process.env.OD_UPDATE_METADATA_URL = updateMetadataUrl;
+}
+
 async function main(): Promise<void> {
   // Must run BEFORE `app.whenReady()` below, because Chromium consumes
   // `--lang` at session bootstrap. Doing it here lets the packaged
@@ -71,15 +99,43 @@ async function main(): Promise<void> {
   applyOsLocaleSwitch(app);
 
   const config = await readPackagedConfig();
+  const afterQuit = parseLauncherAfterQuitArgs(process.argv.slice(1));
   const argvStamp = readProcessStamp(process.argv.slice(1), OPEN_DESIGN_SIDECAR_CONTRACT);
   const namespace = argvStamp?.namespace ?? config.namespace;
-  const paths = resolvePackagedNamespacePaths(config, namespace, process.env);
+  const namespaceConfig = namespace === config.namespace ? config : { ...config, namespace };
+  const initialPaths = resolvePackagedNamespacePaths(namespaceConfig, namespace, process.env);
+  await waitForLauncherAfterQuit(afterQuit, initialPaths);
+  const existingDesktop = await inspectExistingDesktopForLauncher(namespace, {
+    logger: console,
+    paths: initialPaths,
+  });
+  if (existingDesktop.action === "exit") {
+    return;
+  }
+  const launcherRuntime = await resolvePackagedLauncherRuntime(namespaceConfig, initialPaths);
+  const activeConfig = launcherRuntime.config;
+  const paths = launcherRuntime.paths;
   const stamp = argvStamp ?? createPackagedDesktopStamp(namespace);
+
+  // Arm fatal-exit telemetry now that we know the channel key/version. The
+  // startPackagedSidecars call below is THE failure this covers (daemon/web
+  // dying before reporting status, e.g. issue #4638's missing better-sqlite3).
+  startupTelemetryContext = {
+    posthogKey: activeConfig.posthogKey,
+    posthogHost: activeConfig.posthogHost,
+    appVersion: activeConfig.appVersion,
+    namespace,
+    source: SIDECAR_SOURCES.PACKAGED,
+    // Pass installationRoot explicitly: OD_INSTALLATION_DIR is only set in the
+    // daemon child env, not this parent process (see startup-telemetry.ts).
+    installationRoot: paths.installationRoot,
+  };
 
   await ensurePackagedNamespacePaths(paths);
   packagedLogger = createPackagedDesktopLogger(paths);
   attachPackagedDesktopProcessLogging({ logger: packagedLogger, paths, stamp });
   applyPackagedElectronPathOverrides(paths);
+  applyPackagedUpdaterEnv(activeConfig.updateMetadataUrl);
   if (!claimPackagedSingleInstanceLock(app, () => {
     if (showExistingDesktop == null) {
       pendingSecondInstanceFocus = true;
@@ -110,23 +166,43 @@ async function main(): Promise<void> {
   });
 
   const sidecars = await startPackagedSidecars(runtime, paths, {
-    appVersion: config.appVersion,
-    amrProfile: config.amrProfile,
-    daemonCliEntry: config.daemonCliEntry,
-    daemonSidecarEntry: config.daemonSidecarEntry,
-    nodeCommand: config.nodeCommand,
-    telemetryRelayUrl: config.telemetryRelayUrl,
-    posthogKey: config.posthogKey,
-    posthogHost: config.posthogHost,
+    appVersion: activeConfig.appVersion,
+    amrProfile: activeConfig.amrProfile,
+    daemonCliEntry: activeConfig.daemonCliEntry,
+    daemonSidecarEntry: activeConfig.daemonSidecarEntry,
+    electronNodeCommand: launcherRuntime.electronNodeCommand,
+    nodeCommand: activeConfig.nodeCommand,
+    telemetryRelayUrl: activeConfig.telemetryRelayUrl,
+    posthogKey: activeConfig.posthogKey,
+    posthogHost: activeConfig.posthogHost,
     // PR #974 round-5 (lefarcen P2): the Electron entry runs desktop
     // main alongside the daemon, so the import-folder gate must be
     // pinned ON from request 0. See `apps/packaged/src/headless.ts` for
     // the daemon+web-only counterpart that passes `false`.
     requireDesktopAuth: true,
-    webSidecarEntry: config.webSidecarEntry,
-    webStandaloneRoot: config.webStandaloneRoot,
-    webOutputMode: config.webOutputMode,
+    webSidecarEntry: activeConfig.webSidecarEntry,
+    webStandaloneRoot: activeConfig.webStandaloneRoot,
+    webOutputMode: activeConfig.webOutputMode,
+    // Surface each sidecar boot phase on the splash status line so a slow
+    // cold start (Defender scans, native module loads) never reads as a hang.
+    // Both the "spawning" and "ready" edges are mapped so the step counter
+    // advances the instant each long native wait clears.
+    onPhase(phase) {
+      const stage =
+        phase === "daemon-spawning"
+          ? "engine"
+          : phase === "daemon-ready"
+            ? "engineReady"
+            : phase === "web-spawning"
+              ? "interface"
+              : "interfaceReady";
+      setSplashStage(splash.window, stage);
+    },
   });
+  // Sidecars are up; the remaining wait is the hidden main window loading and
+  // mounting the web bundle (the runtime re-asserts this stage at its reveal
+  // gate, which is a no-op when the label is already current).
+  setSplashStage(splash.window, "workspace");
   registerOdProtocol(sidecars.web.url ?? "http://127.0.0.1:0");
 
   const { runDesktopMain } = await import("@open-design/desktop/main");
@@ -150,7 +226,17 @@ async function main(): Promise<void> {
     async discoverDaemonUrl() {
       return sidecars.daemon.url;
     },
+    windowTitle: resolvePackagedWindowTitle(activeConfig),
     onDesktopReady(controls) {
+      void confirmPackagedLauncherRuntime(launcherRuntime).catch((error: unknown) => {
+        packagedLogger?.warn("failed to confirm packaged launcher runtime", { error });
+      });
+      void syncWindowsUninstallDisplayVersion({
+        namespace,
+        version: launcherRuntime.config.appVersion,
+      }).catch((error: unknown) => {
+        packagedLogger?.warn("failed to sync Windows uninstall registry version", { error });
+      });
       showExistingDesktop = controls.show;
       if (!pendingSecondInstanceFocus) return;
       pendingSecondInstanceFocus = false;
@@ -158,15 +244,20 @@ async function main(): Promise<void> {
     },
     preloadPath: join(app.getAppPath(), "preload.cjs"),
     update: {
-      currentVersion: config.appVersion,
+      currentVersion: activeConfig.appVersion,
       downloadRoot: paths.updateRoot,
       installerObservationRoot: paths.installerObservationRoot,
+      launcherLaunchPath: launcherRuntime.installedLaunchPath,
+      launcherRoot: launcherRuntime.launcherPaths.root,
+      launcherPayloadExtractorPath: activeConfig.resourceRoot == null ? null : join(activeConfig.resourceRoot, "bin", "7z.exe"),
+      launcherRuntimePath: launcherRuntime.launcherPaths.runtimePath,
     },
   });
 }
 
-void main().catch((error: unknown) => {
-  if (error instanceof PackagedPathAccessError) {
+void main().catch(async (error: unknown) => {
+  const isPathAccess = error instanceof PackagedPathAccessError;
+  if (isPathAccess) {
     try {
       dialog.showErrorBox(error.title, error.message);
     } catch {
@@ -175,5 +266,25 @@ void main().catch((error: unknown) => {
   }
   packagedLogger?.error("packaged runtime failed", { error });
   console.error("packaged runtime failed", error);
+  // Best-effort crash telemetry on the way out. This is the ONLY new behavior
+  // on the failure path; the happy path never reaches here. reportStartupFailure
+  // self-caps its runtime (Promise.race timeout) and swallows all errors, so it
+  // can neither block nor crash the exit. No-op when telemetry isn't armed yet
+  // or the build has no PostHog key.
+  if (startupTelemetryContext) {
+    await reportStartupFailure({
+      error,
+      isPathAccess,
+      posthogKey: startupTelemetryContext.posthogKey,
+      posthogHost: startupTelemetryContext.posthogHost,
+      distinctId: resolveStartupDistinctId(
+        startupTelemetryContext.namespace,
+        startupTelemetryContext.installationRoot,
+      ),
+      appVersion: startupTelemetryContext.appVersion,
+      namespace: startupTelemetryContext.namespace,
+      source: startupTelemetryContext.source,
+    });
+  }
   process.exit(1);
 });

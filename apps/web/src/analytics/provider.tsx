@@ -24,8 +24,10 @@ import {
   capture,
   getAnalyticsClient,
   getResolvedAnonymousId,
+  setAnalyticsUserId,
   setConfigureGlobals,
 } from './client';
+import { patchExceptionTrackingAppVersion } from './error-tracking';
 import type { AnalyticsConfigureGlobals } from '@open-design/contracts/analytics';
 import {
   detectClientType,
@@ -58,6 +60,10 @@ interface AnalyticsContextValue {
   // App.tsx whenever the user's execution-mode config changes (mode
   // switch, agent select, BYOK save, CLI rescan).
   setConfigureGlobals: (next: AnalyticsConfigureGlobals) => void;
+  // Register / unregister the AMR account id as the `user_id` public
+  // param. Called from App.tsx whenever the AMR login status resolves;
+  // null on logout so later events drop the stale id.
+  setUserId: (userId: string | null) => void;
   anonymousId: string;
   sessionId: string;
   newRequestId: () => string;
@@ -173,6 +179,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void (async () => {
       const resolvedAppVersion = await resolveAppVersionForCapture(appVersion);
+      patchExceptionTrackingAppVersion(resolvedAppVersion);
       // Bridge the always-on error tracker to /api/analytics/config so any
       // exceptions buffered since module load (see client-app.tsx) can flush
       // to PostHog. This runs regardless of the user's analytics consent
@@ -360,6 +367,9 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
       setConfigureGlobals: (next: AnalyticsConfigureGlobals) => {
         setConfigureGlobals(next);
       },
+      setUserId: (userId: string | null) => {
+        setAnalyticsUserId(userId);
+      },
       anonymousId: identity.anonymousId,
       sessionId: identity.sessionId,
       newRequestId: () => randomUUID(),
@@ -381,6 +391,7 @@ export function useAnalytics(): AnalyticsContextValue {
       setConsent: () => undefined,
       setIdentity: () => undefined,
       setConfigureGlobals: () => undefined,
+      setUserId: () => undefined,
       anonymousId: 'unmounted',
       sessionId: 'unmounted',
       newRequestId: () => randomUUID(),

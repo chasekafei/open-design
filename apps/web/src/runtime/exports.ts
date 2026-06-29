@@ -1,5 +1,5 @@
 // Client-side export helpers used by the Share menu in the HTML viewer.
-// Four of the five formats run entirely in the browser:
+// Export formats run entirely in the browser:
 //   - PDF  : open the artifact in a popup window and trigger window.print().
 //            The user picks "Save as PDF" from the system print dialog.
 //   - HTML : download the artifact as a single .html file via a Blob URL.
@@ -9,8 +9,6 @@
 //            windows, vault apps, etc.). No conversion is performed — the
 //            file content is the same source the Source view shows. See
 //            issue #279.
-// PPTX export is fundamentally different — it asks the agent to convert the
-// artifact server-side, so it lives in ProjectView.tsx (not here).
 
 import { buildSrcdoc, type SrcdocOptions } from './srcdoc';
 import { buildReactComponentSrcdoc } from './react-component';
@@ -54,6 +52,29 @@ export function exportAsHtml(html: string, title: string): void {
   const doc = buildSrcdoc(html);
   const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
   triggerDownload(blob, `${safeFilename(title, 'artifact')}.html`);
+}
+
+export async function exportProjectAsHtml(opts: {
+  projectId: string;
+  filePath: string;
+  fallbackHtml: string;
+  fallbackTitle: string;
+}): Promise<void> {
+  const segments = opts.filePath
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+  const url = `/api/projects/${encodeURIComponent(opts.projectId)}/export/${segments}?inline=1`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`html export request failed (${resp.status})`);
+    const blob = await resp.blob();
+    triggerDownload(blob, `${safeFilename(opts.fallbackTitle, 'artifact')}.html`);
+  } catch (err) {
+    console.warn('[exportProjectAsHtml] falling back to source HTML export:', err);
+    exportAsHtml(opts.fallbackHtml, opts.fallbackTitle);
+  }
 }
 
 // A file is treated as a preview-chrome wrapper only when it lives inside
@@ -704,11 +725,11 @@ export function exportAsImage(dataUrl: string, title: string): void {
   }
 }
 
-export type ProjectPdfExportResult = 'desktop' | 'fallback';
+export type ProjectPdfExportResult = 'desktop' | 'fallback' | 'cancelled';
 
 export async function exportProjectAsPdf(opts: {
   deck: boolean;
-  fallbackPdf: () => void;
+  fallbackPdf: () => void | Promise<void>;
   filePath: string;
   projectId: string;
   title: string;
@@ -725,11 +746,12 @@ export async function exportProjectAsPdf(opts: {
     });
     if (!resp.ok) throw new Error(`desktop PDF export unavailable (${resp.status})`);
     const body = await resp.json().catch(() => ({}));
+    if (body?.canceled === true) return 'cancelled';
     if (body && body.ok === false) throw new Error(body.error || 'desktop PDF export failed');
     return 'desktop';
   } catch (err) {
-    console.warn('[exportProjectAsPdf] falling back to browser print:', err);
-    opts.fallbackPdf();
+    console.warn('[exportProjectAsPdf] falling back to programmatic PDF:', err);
+    await opts.fallbackPdf();
     return 'fallback';
   }
 }
@@ -811,6 +833,48 @@ export async function exportProjectAsZip(opts: {
   }
 }
 
+// Design system ZIP export — asks the daemon to bundle the whole brand
+// directory plus a generated SKILLS.md usage guide so the user gets a
+// self-contained, shareable package. Used by the Design Systems detail panel's
+// download button. Returns false on failure so the caller can surface an error.
+export async function downloadDesignSystemArchive(opts: {
+  designSystemId: string;
+  fallbackTitle: string;
+}): Promise<boolean> {
+  const url = `/api/design-systems/${encodeURIComponent(opts.designSystemId)}/archive`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`archive request failed (${resp.status})`);
+    const blob = await resp.blob();
+    triggerDownload(blob, archiveFilenameFrom(resp, opts.fallbackTitle, ''));
+    return true;
+  } catch (err) {
+    console.warn('[downloadDesignSystemArchive] failed:', err);
+    return false;
+  }
+}
+
+export async function downloadProjectArchive(opts: {
+  projectId: string;
+  fallbackTitle: string;
+  root?: string;
+}): Promise<boolean> {
+  const root = opts.root?.replace(/^\/+|\/+$/g, '') ?? '';
+  const url = `/api/projects/${encodeURIComponent(opts.projectId)}/archive${
+    root ? `?root=${encodeURIComponent(root)}` : ''
+  }`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`archive request failed (${resp.status})`);
+    const blob = await resp.blob();
+    triggerDownload(blob, archiveFilenameFrom(resp, opts.fallbackTitle, root));
+    return true;
+  } catch (err) {
+    console.warn('[downloadProjectArchive] failed:', err);
+    return false;
+  }
+}
+
 // Exported for unit tests. Pure string transform with no DOM dependency.
 export function archiveRootFromFilePath(filePath: string): string {
   const trimmed = (filePath || '').replace(/^\/+/, '');
@@ -876,12 +940,39 @@ export function buildSandboxedPreviewDocument(
 </html>`;
 }
 
+function currentOriginBaseHref(): string | undefined {
+  if (typeof window !== 'undefined' && typeof window.location?.origin === 'string') {
+    return `${window.location.origin.replace(/\/+$/, '')}/`;
+  }
+  const base =
+    typeof document !== 'undefined' && typeof document.baseURI === 'string'
+      ? document.baseURI
+      : typeof window !== 'undefined' && typeof window.location?.href === 'string'
+        ? window.location.href
+        : undefined;
+  if (!base) return undefined;
+  try {
+    return new URL('/', base).href;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildBlobSafeSrcdoc(html: string, options?: SrcdocOptions): string {
+  const baseHref =
+    typeof options?.baseHref === 'string' ? options.baseHref : currentOriginBaseHref();
+  return buildSrcdoc(html, {
+    ...options,
+    ...(baseHref ? { baseHref } : {}),
+  });
+}
+
 export function openSandboxedPreviewInNewTab(
   html: string,
   title: string,
   srcdocOptions?: SrcdocOptions,
 ): void {
-  const doc = buildSandboxedPreviewDocument(buildSrcdoc(html, srcdocOptions), title);
+  const doc = buildSandboxedPreviewDocument(buildBlobSafeSrcdoc(html, srcdocOptions), title);
   const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank', 'noopener,noreferrer');
@@ -906,13 +997,13 @@ export function openSandboxedPreviewInNewTab(
 export async function exportAsPdf(
   html: string,
   title: string,
-  opts?: SrcdocOptions & { sandboxedPreview?: boolean },
+  opts?: SrcdocOptions & { sandboxedPreview?: boolean; onProgress?: ExportProgress },
 ): Promise<void> {
   const sandboxedPreview = opts?.sandboxedPreview ?? true;
   // Generate a per-export nonce so the print-ready handshake is resistant to
   // spoofing by untrusted scripts inside the exported artifact.
   const nonce = randomUUID();
-  let doc = buildSrcdoc(html, opts);
+  let doc = buildBlobSafeSrcdoc(html, opts);
   if (opts?.deck) doc = injectDeckPrintStylesheet(doc);
   doc = injectPrintReadyHandshake(doc, nonce);
 
@@ -942,13 +1033,26 @@ export async function exportAsPdf(
     return;
   }
 
-  // Browser fallback: wrap with allow-modals so the injected script can
-  // call window.print(), then inject the self-printing script and open a
-  // popup.
+  // Browser fallback (pure web): assemble the PDF programmatically — capture
+  // each slide (deck) or the full page through the export-capture bridge, then
+  // build it with jsPDF. No print dialog, no agent. The window.print() popup
+  // below is kept only as a last-resort fallback if the capture path throws.
+  try {
+    await exportArtifactAsPdf(html, title, { deck: !!opts?.deck, onProgress: opts?.onProgress });
+    return;
+  } catch (err) {
+    console.warn('[exportAsPdf] programmatic PDF failed, falling back to print popup:', err);
+  }
+
+  // Last-resort: wrap with allow-modals so the injected script can call
+  // window.print(), then inject the self-printing script and open a popup.
   if (sandboxedPreview) {
     doc = buildSandboxedPreviewDocument(doc, title, { allowModals: true });
-    doc = injectParentPrintReadyCache(doc, nonce);
   }
+  // Even in the non-sandboxed browser fallback we keep the same readiness
+  // cache contract as the desktop bridge so the popup can wait for actual
+  // rendered content instead of printing after a blind fixed delay.
+  doc = injectParentPrintReadyCache(doc, nonce);
   doc = injectPrintScript(doc, title);
 
   const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
@@ -981,12 +1085,76 @@ export async function exportAsPdf(
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+/**
+ * A reported print size is only usable when both dimensions are positive,
+ * finite numbers. The desktop bridge (apps/desktop/src/main/pdf-export.ts
+ * inferPageSize) sizes the PDF page to this; a zero/invalid size makes it
+ * fall back to measuring the wrapper viewport, which — per that function's
+ * own docs — blanks artifacts whose visible content sits below the fold.
+ * Exported so the injected handshake/cache scripts and unit tests share one
+ * definition. See issue #4458.
+ */
+export function isUsablePrintSize(width: unknown, height: unknown): boolean {
+  return (
+    typeof width === 'number' &&
+    typeof height === 'number' &&
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width > 0 &&
+    height > 0
+  );
+}
+
+/**
+ * Poll `measure` once per animation frame until it returns a usable
+ * (positive, finite) size, then call `report` with it. Bounded by
+ * `maxFrames`: a genuinely empty artifact never gains a usable size, so the
+ * last measurement is reported best-effort rather than hanging the desktop
+ * readiness handshake forever.
+ *
+ * This fixes one #4458 blank-PDF path: the in-iframe handshake used to
+ * report the content size after a fixed two animation frames, which can fire
+ * before a heavier artifact has finished layout (size still 0). The desktop
+ * bridge then has no usable `__odPrintSize`, falls back to the wrapper
+ * viewport, and prints a blank page. Waiting for a non-zero size avoids that.
+ *
+ * Injected into the handshake via `toString()`; the function is self-contained
+ * (no references to other module symbols) so production minification cannot
+ * break the injected copy. The `raf` seam keeps it unit-testable.
+ */
+export function reportPrintSizeWhenStable(
+  measure: () => { width: number; height: number },
+  report: (size: { width: number; height: number }) => void,
+  maxFrames: number,
+  raf: (cb: () => void) => void = (cb) => requestAnimationFrame(() => cb()),
+): void {
+  const usable = (w: number, h: number): boolean =>
+    typeof w === 'number' &&
+    typeof h === 'number' &&
+    Number.isFinite(w) &&
+    Number.isFinite(h) &&
+    w > 0 &&
+    h > 0;
+  const step = (remaining: number): void => {
+    const size = measure();
+    if (usable(size.width, size.height) || remaining <= 0) {
+      report(size);
+      return;
+    }
+    raf(() => step(remaining - 1));
+  };
+  step(maxFrames);
+}
+
 function injectPrintScript(doc: string, title: string): string {
   const safeTitle = JSON.stringify(title || 'artifact');
-  // setTimeout gives stylesheets and images one tick to settle before the
-  // print dialog measures the page; without it some print previews come
-  // out blank in Chrome.
-  const script = `<script>try{document.title=${safeTitle}}catch(e){}window.addEventListener('load',function(){setTimeout(function(){try{window.focus();window.print()}catch(e){}},300)})</script>`;
+  // Browser fallback PDF export shares the same print-readiness signal as the
+  // desktop native path. When the cache is present, wait for it so the popup
+  // prints only after fonts, images, CSS image URLs, and final layout have
+  // settled. If the handshake script is blocked entirely (for example by a
+  // CSP that forbids inline scripts), fall back to the historical load+delay
+  // behavior instead of waiting for the full ready deadline.
+  const script = `<script>(function(){try{document.title=${safeTitle}}catch(e){}function doPrint(){try{window.focus();window.print()}catch(e){}}function afterStableFrames(fn){requestAnimationFrame(function(){requestAnimationFrame(fn)})}window.addEventListener('load',function(){if(typeof window.__odPrintReady!=='boolean'){setTimeout(doPrint,300);return}var deadline=Date.now()+30000;var handshakeStartDeadline=Date.now()+1000;(function waitForReady(){if(window.__odPrintReady===true){afterStableFrames(doPrint);return}if(window.__odPrintReadyStarted===false&&Date.now()>=handshakeStartDeadline){setTimeout(doPrint,300);return}if(Date.now()>=deadline){afterStableFrames(doPrint);return}setTimeout(waitForReady,50)})()})})();</script>`;
   if (/<\/head>/i.test(doc)) return doc.replace(/<\/head>/i, `${script}</head>`);
   if (/<\/body>/i.test(doc)) return doc.replace(/<\/body>/i, `${script}</body>`);
   return doc + script;
@@ -1001,17 +1169,36 @@ function injectPrintReadyHandshake(doc: string, nonce: string): string {
   // This mirrors the safety of the legacy waitForPrintableContent() helper and
   // prevents image-heavy exports from printing with blank images.
   //
+  // Once settled, the message also carries the artifact's own content
+  // dimensions (scroll/offset size of its documentElement). This script runs
+  // inside the sandboxed preview iframe, which the parent wrapper cannot
+  // measure directly (sandbox="allow-scripts" has no allow-same-origin, so
+  // iframe.contentDocument is null). Reporting the size from here lets the
+  // desktop bridge size the PDF page to the real content instead of the
+  // wrapper's viewport, which otherwise clips — or blanks — taller artifacts
+  // (issue #4067). The parent caches it via injectParentPrintReadyCache and
+  // inferPageSize() in apps/desktop/src/main/pdf-export.ts consumes it.
+  //
   // The nonce is a per-export random UUID that verifies the readiness signal
   // came from our injected handshake, not a spoofed message from untrusted
   // artifact code.
-  const script = `<script data-od-print-ready>(function(){function waitForImages(){var imgs=Array.from(document.images).filter(function(img){return !img.complete});return Promise.all(imgs.map(function(img){return new Promise(function(r){img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});if(img.complete)r()})}))}function cssUrlValues(value){var urls=[];if(!value||value==='none')return urls;value.replace(/url\\((['"]?)(.*?)\\1\\)/g,function(_,q,rawUrl){if(rawUrl&&!/^data:/i.test(rawUrl))urls.push(rawUrl);return''});return urls}function waitForCssBackgroundImages(){var urls=new Set();Array.from(document.querySelectorAll('*')).forEach(function(el){var style=window.getComputedStyle(el);cssUrlValues(style.backgroundImage).forEach(function(url){urls.add(url)});cssUrlValues(style.borderImageSource).forEach(function(url){urls.add(url)});cssUrlValues(style.listStyleImage).forEach(function(url){urls.add(url)})});return Promise.all(Array.from(urls).map(function(url){return new Promise(function(r){var img=new Image();img.onload=r;img.onerror=r;img.src=url})}))}function nextFrame(){return new Promise(function(r){requestAnimationFrame(function(){r(true)})})}Promise.all([document.fonts&&document.fonts.ready?document.fonts.ready.catch(function(){}):Promise.resolve(),new Promise(function(r){if(document.readyState==='complete')r();else window.addEventListener('load',r,{once:true})})]).then(function(){return Promise.all([waitForImages(),waitForCssBackgroundImages()])}).then(nextFrame).then(nextFrame).then(function(){window.parent.postMessage({type:'OD_PRINT_READY',nonce:'${nonce}'},'*')})})();<\/script>`;
+  const script = `<script data-od-print-ready>(function(){window.parent.postMessage({type:'OD_PRINT_READY_STARTED',nonce:'${nonce}'},'*');function waitForImages(){var imgs=Array.from(document.images).filter(function(img){if(img.loading==='lazy')img.loading='eager';return !img.complete});return Promise.all(imgs.map(function(img){return new Promise(function(r){img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});if(img.complete)r()})}))}function cssUrlValues(value){var urls=[];if(!value||value==='none')return urls;value.replace(/url\\((['"]?)(.*?)\\1\\)/g,function(_,q,rawUrl){if(rawUrl&&!/^data:/i.test(rawUrl))urls.push(rawUrl);return''});return urls}function waitForCssBackgroundImages(){var urls=new Set();Array.from(document.querySelectorAll('*')).forEach(function(el){var style=window.getComputedStyle(el);cssUrlValues(style.backgroundImage).forEach(function(url){urls.add(url)});cssUrlValues(style.borderImageSource).forEach(function(url){urls.add(url)});cssUrlValues(style.listStyleImage).forEach(function(url){urls.add(url)})});return Promise.all(Array.from(urls).map(function(url){return new Promise(function(r){var img=new Image();img.onload=r;img.onerror=r;img.src=url})}))}function nextFrame(){return new Promise(function(r){requestAnimationFrame(function(){r(true)})})}Promise.all([document.fonts&&document.fonts.ready?document.fonts.ready.catch(function(){}):Promise.resolve(),new Promise(function(r){if(document.readyState==='complete')r();else window.addEventListener('load',r,{once:true})})]).then(function(){return Promise.all([waitForImages(),waitForCssBackgroundImages()])}).then(nextFrame).then(nextFrame).then(function(){var __odReport=${reportPrintSizeWhenStable.toString()};function measure(){var de=document.documentElement;var b=document.body||de;return {width:Math.max(de.scrollWidth,b.scrollWidth,de.offsetWidth,b.offsetWidth),height:Math.max(de.scrollHeight,b.scrollHeight,de.offsetHeight,b.offsetHeight)}}__odReport(measure,function(size){window.parent.postMessage({type:'OD_PRINT_READY',nonce:'${nonce}',width:size.width,height:size.height},'*')},30)})})();<\/script>`;
   if (/<\/head>/i.test(doc)) return doc.replace(/<\/head>/i, `${script}</head>`);
   if (/<\/body>/i.test(doc)) return doc.replace(/<\/body>/i, `${script}</body>`);
   return doc + script;
 }
 
 function injectParentPrintReadyCache(doc: string, nonce: string): string {
-  const script = `<script>window.__odPrintReady=false;window.addEventListener('message',function(e){if(e.data&&e.data.type==='OD_PRINT_READY'&&e.data.nonce==='${nonce}'&&(e.source===window||(window.frames&&e.source===window.frames[0])))window.__odPrintReady=true});<\/script>`;
+  // Cache the readiness flag and the content size the artifact reports through
+  // the handshake. window.__odPrintSize is read by inferPageSize() in
+  // apps/desktop/src/main/pdf-export.ts to size the PDF page to the real
+  // artifact rather than the wrapper viewport (issue #4067). Width/height are
+  // validated as positive finite numbers so a malformed message cannot poison
+  // the page size; the nonce + source check keep untrusted frames from spoofing
+  // either signal. window.__odPrintReadyStarted distinguishes a live handshake
+  // from a CSP-blocked one so the browser fallback can preserve the historical
+  // quick print path when the inner script never runs.
+  const script = `<script>window.__odPrintReady=false;window.__odPrintReadyStarted=false;window.__odPrintSize=null;var __odUsable=${isUsablePrintSize.toString()};window.addEventListener('message',function(e){if(e.data&&e.data.nonce==='${nonce}'&&(e.source===window||(window.frames&&e.source===window.frames[0]))){if(e.data.type==='OD_PRINT_READY_STARTED'){window.__odPrintReadyStarted=true;return}if(e.data.type==='OD_PRINT_READY'){window.__odPrintReady=true;if(__odUsable(e.data.width,e.data.height))window.__odPrintSize={width:e.data.width,height:e.data.height}}}});<\/script>`;
   if (/<head>/i.test(doc)) return doc.replace(/<head>/i, `<head>${script}`);
   return script + doc;
 }
@@ -1060,4 +1247,222 @@ function injectDeckPrintStylesheet(doc: string): string {
   if (/<\/head>/i.test(doc)) return doc.replace(/<\/head>/i, `${tag}</head>`);
   if (/<head[^>]*>/i.test(doc)) return doc.replace(/<head[^>]*>/i, (m) => `${m}${tag}`);
   return tag + doc;
+}
+
+// ===========================================================================
+// Programmatic client-side capture + PDF assembly.
+//
+// The in-iframe capture half lives in ./srcdoc.ts (injectExportCaptureBridge).
+// Here we drive it: spin up a hidden, full-resolution export iframe, collect
+// one image per slide, then assemble the output with jsPDF — entirely in the
+// browser, with no print dialog and no agent/model call. The library is
+// dynamically imported so it stays out of the
+// main bundle until an export actually runs.
+// ===========================================================================
+
+export type CapturedSlide = {
+  index: number;
+  dataUrl?: string;
+  w: number;
+  h: number;
+  notes?: string;
+};
+
+/** Progress callback: `(slidesDone, totalSlides)`. */
+export type ExportProgress = (done: number, total: number) => void;
+
+function delayMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function waitForIframeWindow(iframe: HTMLIFrameElement, timeout = 15_000): Promise<Window> {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      const win = iframe.contentWindow;
+      if (win) resolve(win);
+      else reject(new Error('export iframe window unavailable'));
+    };
+    const timer = setTimeout(finish, timeout);
+    iframe.addEventListener('load', finish, { once: true });
+  });
+}
+
+type CaptureRequest = {
+  id: string;
+  mode: 'image';
+  deck: boolean;
+  single?: boolean;
+  delay: number;
+};
+
+/**
+ * Drive the in-iframe export-capture bridge for one window, invoking `onSlide`
+ * for each captured slide. Resolves on the bridge's `done`, rejects on its
+ * `error` or an inactivity timeout (so a wedged capture never hangs forever).
+ */
+function runExportCapture(
+  win: Window,
+  req: CaptureRequest,
+  onSlide: (slide: CapturedSlide, total: number) => void,
+  timeoutMs = 120_000,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    let lastActivity = Date.now();
+    const cleanup = () => {
+      window.removeEventListener('message', onMsg);
+      clearInterval(watchdog);
+    };
+    function onMsg(ev: MessageEvent) {
+      if (ev.source !== win) return;
+      const d = ev.data as {
+        type?: string; id?: string; index?: number; total?: number;
+        dataUrl?: string; w?: number; h?: number;
+        notes?: string; error?: string;
+      } | null;
+      if (!d || d.id !== req.id) return;
+      if (d.type === 'od:export-capture:slide') {
+        lastActivity = Date.now();
+        onSlide(
+          {
+            index: d.index ?? 0,
+            dataUrl: d.dataUrl,
+            w: d.w ?? 0,
+            h: d.h ?? 0,
+            notes: typeof d.notes === 'string' ? d.notes : '',
+          },
+          d.total ?? 1,
+        );
+      } else if (d.type === 'od:export-capture:done') {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        resolve();
+      } else if (d.type === 'od:export-capture:error') {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        reject(new Error(String(d.error || 'export capture failed')));
+      }
+    }
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastActivity > timeoutMs) {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        reject(new Error('export capture timed out'));
+      }
+    }, 2_000);
+    window.addEventListener('message', onMsg);
+    try {
+      win.postMessage({ type: 'od:export-capture', ...req }, '*');
+    } catch (err) {
+      finished = true;
+      cleanup();
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
+  });
+}
+
+/**
+ * Capture every slide of a deck (or the full page, for a non-deck artifact) by
+ * rendering the HTML in a hidden, full-resolution export iframe and driving the
+ * export-capture bridge. Returns the slides ordered by index.
+ */
+async function captureArtifactSlides(
+  html: string,
+  opts: {
+    deck: boolean;
+    mode: 'image';
+    width?: number;
+    height?: number;
+    onProgress?: ExportProgress;
+  },
+): Promise<CapturedSlide[]> {
+  const width = opts.width ?? (opts.deck ? 1920 : 1440);
+  const height = opts.height ?? (opts.deck ? 1080 : 900);
+
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('sandbox', 'allow-scripts');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.setAttribute('tabindex', '-1');
+  iframe.style.cssText = `position:fixed;left:-100000px;top:0;width:${width}px;height:${height}px;border:0;background:#fff;`;
+  iframe.srcdoc = buildSrcdoc(html, { deck: opts.deck });
+  document.body.appendChild(iframe);
+
+  const slides: CapturedSlide[] = [];
+  try {
+    const win = await waitForIframeWindow(iframe);
+    // Give the deck bridge time to fit fixed-canvas (transform: scale) layouts
+    // to the iframe before the first capture.
+    await delayMs(opts.deck ? 600 : 150);
+    await runExportCapture(
+      win,
+      {
+        id: `exp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        mode: opts.mode,
+        deck: opts.deck,
+        delay: 350,
+      },
+      (slide, total) => {
+        slides.push(slide);
+        opts.onProgress?.(slides.length, total);
+      },
+      45_000,
+    );
+  } finally {
+    iframe.remove();
+  }
+  slides.sort((a, b) => a.index - b.index);
+  return slides;
+}
+
+/** Programmatic, client-side PDF: image-per-slide (deck) or paginated full page. */
+export async function exportArtifactAsPdf(
+  html: string,
+  title: string,
+  opts: { deck: boolean; onProgress?: ExportProgress },
+): Promise<void> {
+  const slides = await captureArtifactSlides(html, {
+    deck: opts.deck,
+    mode: 'image',
+    onProgress: opts.onProgress,
+  });
+  const images = slides.filter((s) => s.dataUrl && s.w > 0 && s.h > 0);
+  if (!images.length) throw new Error('Nothing was captured for PDF export');
+
+  const { jsPDF } = await import('jspdf');
+  const filename = `${safeFilename(title, 'artifact')}.pdf`;
+
+  if (opts.deck) {
+    const first = images[0]!;
+    const pdf = new jsPDF({
+      orientation: first.w >= first.h ? 'landscape' : 'portrait',
+      unit: 'px',
+      format: [first.w, first.h],
+      compress: true,
+    });
+    images.forEach((s, i) => {
+      if (i > 0) pdf.addPage([s.w, s.h], s.w >= s.h ? 'landscape' : 'portrait');
+      pdf.addImage(s.dataUrl!, 'PNG', 0, 0, s.w, s.h);
+    });
+    triggerDownload(pdf.output('blob'), filename);
+    return;
+  }
+
+  // Non-deck: slice the tall full-page capture into A4-proportioned pages.
+  const img = images[0]!;
+  const pageW = img.w;
+  const pageH = Math.max(1, Math.round(pageW * Math.SQRT2)); // A4 portrait ≈ 1:1.414
+  const pages = Math.max(1, Math.ceil(img.h / pageH));
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [pageW, pageH], compress: true });
+  for (let p = 0; p < pages; p++) {
+    if (p > 0) pdf.addPage([pageW, pageH], 'portrait');
+    pdf.addImage(img.dataUrl!, 'PNG', 0, -p * pageH, img.w, img.h);
+  }
+  triggerDownload(pdf.output('blob'), filename);
 }

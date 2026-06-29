@@ -1,3 +1,5 @@
+import { RELEASE_CHANNELS, type ReleaseChannel } from "@open-design/release";
+
 export const APP_KEYS = Object.freeze({
   DAEMON: "daemon",
   DESKTOP: "desktop",
@@ -67,15 +69,28 @@ export const SIDECAR_DEFAULTS = Object.freeze({
   windowsPipePrefix: "open-design",
 } as const);
 
+export const OPEN_DESIGN_PRODUCT_NAME = "Open Design";
+
+export function resolveWindowsReleaseNamespaceToken(value: string): string {
+  return value.replace(/[^A-Za-z0-9._-]+/g, "-");
+}
+
+export function resolveWindowsUninstallRegistryKey(namespace: string): string {
+  const namespaceToken = resolveWindowsReleaseNamespaceToken(namespace);
+  return `Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${OPEN_DESIGN_PRODUCT_NAME}-${namespaceToken}`;
+}
+
 export const SIDECAR_MESSAGES = Object.freeze({
   CLICK: "click",
   CONSOLE: "console",
   EVAL: "eval",
+  EXPORT_ARTIFACT: "export-artifact",
   EXPORT_PDF: "export-pdf",
   MINT_IMPORT_TOKEN: "mint-import-token",
   REGISTER_DESKTOP_AUTH: "register-desktop-auth",
   SCREENSHOT: "screenshot",
   SHUTDOWN: "shutdown",
+  SHOW: "show",
   STATUS: "status",
   UPDATE: "update",
 } as const);
@@ -97,13 +112,14 @@ export const DESKTOP_UPDATE_MODES = Object.freeze({
 export type DesktopUpdateMode = (typeof DESKTOP_UPDATE_MODES)[keyof typeof DESKTOP_UPDATE_MODES];
 
 export const DESKTOP_UPDATE_CHANNELS = Object.freeze({
-  BETA: "beta",
-  NIGHTLY: "nightly",
-  PREVIEW: "preview",
-  STABLE: "stable",
+  BETA: RELEASE_CHANNELS.BETA,
+  BETAS: RELEASE_CHANNELS.BETAS,
+  PRERELEASE: RELEASE_CHANNELS.PRERELEASE,
+  PREVIEW: RELEASE_CHANNELS.PREVIEW,
+  STABLE: RELEASE_CHANNELS.STABLE,
 } as const);
 
-export type DesktopUpdateChannel = (typeof DESKTOP_UPDATE_CHANNELS)[keyof typeof DESKTOP_UPDATE_CHANNELS];
+export type DesktopUpdateChannel = ReleaseChannel;
 
 export const DESKTOP_UPDATE_STATES = Object.freeze({
   AVAILABLE: "available",
@@ -172,6 +188,7 @@ export type DesktopStatusSnapshot = {
   state: DesktopRuntimeState;
   title?: string | null;
   update?: DesktopUpdateStatusSnapshot;
+  updateStatusError?: string;
   updatedAt?: string;
   url?: string | null;
   windowVisible?: boolean;
@@ -229,6 +246,36 @@ export type DesktopExportPdfResult = {
   path?: string;
 };
 
+export type DesktopExportArtifactFormat = "pdf" | "image";
+// Electron's `nativeImage` (the off-screen renderer the programmatic exporter
+// uses) can only encode PNG and JPEG. WebP is deliberately excluded so a caller
+// asking for it gets a clear validation error instead of a silent PNG downgrade.
+// (The in-app web Download menu encodes WebP client-side via canvas.toBlob and
+// is unaffected by this list.)
+export type DesktopExportArtifactImageFormat = "png" | "jpeg";
+
+// Generic programmatic export (PDF / image). The desktop renderer writes
+// the result to a temporary file and returns its path; the daemon streams those
+// bytes to the HTTP caller (the `od export` CLI), then removes the temp file.
+export type DesktopExportArtifactInput = {
+  baseHref?: string;
+  deck: boolean;
+  format: DesktopExportArtifactFormat;
+  html: string;
+  imageFormat?: DesktopExportArtifactImageFormat;
+  title: string;
+  width?: number;
+  height?: number;
+};
+
+export type DesktopExportArtifactResult = {
+  bytes?: number;
+  error?: string;
+  mime?: string;
+  ok: boolean;
+  path?: string;
+};
+
 export type DesktopUpdateCapabilitySet = {
   canApplyInPlace: boolean;
   canDownload: boolean;
@@ -267,7 +314,12 @@ export type DesktopUpdateErrorSnapshot = {
 };
 
 export type DesktopUpdateInstallResult = {
+  activeVersion?: string;
+  artifactPath?: string;
   dryRun?: boolean;
+  helperLogPath?: string;
+  launcherRuntimePath?: string;
+  launchPath?: string;
   openedAt: string;
   path: string;
 };
@@ -296,12 +348,41 @@ export type DesktopUpdateIncomingSnapshot = {
   version: string;
 };
 
+export type DesktopUpdateCacheLifecycleTrigger = "cold-start" | "next-version-ready";
+
+export type DesktopUpdateReleaseLifecycleState =
+  | "cleanup-deferred"
+  | "cleanup-removed"
+  | "deprecated"
+  | "retained"
+  | "unknown";
+
+export type DesktopUpdateCacheLifecycleSummary = {
+  lastRunAt?: string;
+  lastTrigger?: DesktopUpdateCacheLifecycleTrigger;
+  platform: string;
+  releases: {
+    cleanupDeferred: number;
+    cleanupRemoved: number;
+    deprecated: number;
+    errors: number;
+    retained: number;
+    total: number;
+    unknown: number;
+  };
+};
+
+export type DesktopUpdateCacheSnapshot = {
+  lifecycle?: DesktopUpdateCacheLifecycleSummary;
+};
+
 export type DesktopUpdateStatusSnapshot = {
   active?: DesktopUpdateReleaseSnapshot;
   arch: string;
   artifact?: DesktopUpdateArtifactSnapshot;
   artifactUrl?: string;
   availableVersion?: string;
+  cache?: DesktopUpdateCacheSnapshot;
   capabilities: DesktopUpdateCapabilitySet;
   channel: DesktopUpdateChannel;
   checksum?: DesktopUpdateChecksumSnapshot;
@@ -332,8 +413,10 @@ export type SidecarShutdownMessage = { type: typeof SIDECAR_MESSAGES.SHUTDOWN };
 export type DesktopEvalMessage = { input: DesktopEvalInput; type: typeof SIDECAR_MESSAGES.EVAL };
 export type DesktopScreenshotMessage = { input: DesktopScreenshotInput; type: typeof SIDECAR_MESSAGES.SCREENSHOT };
 export type DesktopConsoleMessage = { type: typeof SIDECAR_MESSAGES.CONSOLE };
+export type DesktopShowMessage = { type: typeof SIDECAR_MESSAGES.SHOW };
 export type DesktopClickMessage = { input: DesktopClickInput; type: typeof SIDECAR_MESSAGES.CLICK };
 export type DesktopExportPdfMessage = { input: DesktopExportPdfInput; type: typeof SIDECAR_MESSAGES.EXPORT_PDF };
+export type DesktopExportArtifactMessage = { input: DesktopExportArtifactInput; type: typeof SIDECAR_MESSAGES.EXPORT_ARTIFACT };
 export type DesktopUpdateMessage = { input: DesktopUpdateInput; type: typeof SIDECAR_MESSAGES.UPDATE };
 
 // Sent by the desktop main process to the daemon over its sidecar IPC at
@@ -384,8 +467,10 @@ export type DesktopSidecarMessage =
   | DesktopEvalMessage
   | DesktopScreenshotMessage
   | DesktopConsoleMessage
+  | DesktopShowMessage
   | DesktopClickMessage
   | DesktopExportPdfMessage
+  | DesktopExportArtifactMessage
   | DesktopUpdateMessage;
 
 export type ShutdownResult = {
@@ -591,6 +676,38 @@ function normalizeDesktopExportPdfInput(input: unknown): DesktopExportPdfInput {
   };
 }
 
+function normalizeOptionalPositiveNumber(value: unknown, label: string): number | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`${label} must be a positive number`);
+  }
+  return value;
+}
+
+const DESKTOP_EXPORT_ARTIFACT_FORMATS: readonly DesktopExportArtifactFormat[] = ["pdf", "image"];
+const DESKTOP_EXPORT_ARTIFACT_IMAGE_FORMATS: readonly DesktopExportArtifactImageFormat[] = ["png", "jpeg"];
+
+function normalizeDesktopExportArtifactInput(input: unknown): DesktopExportArtifactInput {
+  const value = assertObject(input, "desktop artifact export input");
+  assertKnownKeys(value, ["baseHref", "deck", "format", "html", "imageFormat", "title", "width", "height"], "desktop artifact export input");
+  if (!DESKTOP_EXPORT_ARTIFACT_FORMATS.includes(value.format as DesktopExportArtifactFormat)) {
+    throw new Error(`unsupported artifact export format: ${String(value.format)}`);
+  }
+  if (value.imageFormat != null && !DESKTOP_EXPORT_ARTIFACT_IMAGE_FORMATS.includes(value.imageFormat as DesktopExportArtifactImageFormat)) {
+    throw new Error(`unsupported artifact export image format: ${String(value.imageFormat)}`);
+  }
+  return {
+    ...(value.baseHref == null ? {} : { baseHref: normalizeNonEmptyString(value.baseHref, "desktop artifact export baseHref") }),
+    deck: normalizeBoolean(value.deck, "desktop artifact export deck"),
+    format: value.format as DesktopExportArtifactFormat,
+    html: normalizeNonEmptyString(value.html, "desktop artifact export html"),
+    ...(value.imageFormat == null ? {} : { imageFormat: value.imageFormat as DesktopExportArtifactImageFormat }),
+    title: normalizeNonEmptyString(value.title, "desktop artifact export title"),
+    ...(value.width == null ? {} : { width: normalizeOptionalPositiveNumber(value.width, "desktop artifact export width")! }),
+    ...(value.height == null ? {} : { height: normalizeOptionalPositiveNumber(value.height, "desktop artifact export height")! }),
+  };
+}
+
 function isDesktopUpdateAction(value: unknown): value is DesktopUpdateAction {
   return Object.values(DESKTOP_UPDATE_ACTIONS).includes(value as DesktopUpdateAction);
 }
@@ -646,6 +763,7 @@ export function normalizeDesktopSidecarMessage(input: unknown): DesktopSidecarMe
     case SIDECAR_MESSAGES.STATUS:
     case SIDECAR_MESSAGES.SHUTDOWN:
     case SIDECAR_MESSAGES.CONSOLE:
+    case SIDECAR_MESSAGES.SHOW:
       assertKnownKeys(value, ["type"], "desktop sidecar message");
       return { type };
     case SIDECAR_MESSAGES.EVAL:
@@ -660,6 +778,9 @@ export function normalizeDesktopSidecarMessage(input: unknown): DesktopSidecarMe
     case SIDECAR_MESSAGES.EXPORT_PDF:
       assertKnownKeys(value, ["input", "type"], "desktop sidecar message");
       return { input: normalizeDesktopExportPdfInput(value.input), type };
+    case SIDECAR_MESSAGES.EXPORT_ARTIFACT:
+      assertKnownKeys(value, ["input", "type"], "desktop sidecar message");
+      return { input: normalizeDesktopExportArtifactInput(value.input), type };
     case SIDECAR_MESSAGES.UPDATE:
       assertKnownKeys(value, ["input", "type"], "desktop sidecar message");
       return { input: normalizeDesktopUpdateInput(value.input), type };

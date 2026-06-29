@@ -1,6 +1,6 @@
 import type http from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -134,6 +134,23 @@ describe('resolveProjectFilePath', () => {
       resolveProjectFilePath(projectsRoot, projectId, '../other-project/secret.mp4'),
     ).rejects.toThrow();
   });
+
+  it('rejects symlink escapes inside managed projects', async () => {
+    const outsideRoot = mkdtempSync(path.join(tmpdir(), 'od-range-outside-'));
+    try {
+      await writeFile(path.join(outsideRoot, 'secret.txt'), 'secret');
+      await symlink(
+        path.join(outsideRoot, 'secret.txt'),
+        path.join(projectsRoot, projectId, 'linked-secret.txt'),
+      );
+
+      await expect(
+        resolveProjectFilePath(projectsRoot, projectId, 'linked-secret.txt'),
+      ).rejects.toMatchObject({ code: 'EPATHESCAPE' });
+    } finally {
+      rmSync(outsideRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -177,6 +194,20 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     await writeFile(
       path.join(dir, 'snapshot-bridged.html'),
       Buffer.from('<html><body><script data-od-url-snapshot-bridge></script><main>Preview</main></body></html>'),
+    );
+    await mkdir(path.join(dir, 'dist', 'assets'), { recursive: true });
+    await writeFile(
+      path.join(dir, 'vite-entry.html'),
+      Buffer.from('<!doctype html><html><head><script type="module" src="/src/main.tsx"></script></head><body><div id="root"></div></body></html>'),
+    );
+    await writeFile(
+      path.join(dir, 'dist', 'index.html'),
+      Buffer.from(
+        '<!doctype html><html><head>' +
+          '<script type="module" crossorigin src="/assets/app.js"></script>' +
+          '<link rel="stylesheet" crossorigin href="/assets/app.css">' +
+          '</head><body><div id="root"></div></body></html>',
+      ),
     );
   });
 
@@ -281,6 +312,18 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     expect(html).toContain("type: 'od:snapshot:result'");
     expect(html).not.toContain('data-od-url-scroll-bridge');
     expect(html).not.toContain('data-od-url-selection-bridge');
+  });
+
+  it('serves built dist HTML for Vite dev entries so previews do not load /src from daemon root', async () => {
+    const res = await fetch(rawUrl('vite-entry.html'));
+    expect(res.status).toBe(200);
+    const html = await res.text();
+
+    expect(html).not.toContain('/src/main.tsx');
+    expect(html).not.toContain('src="/assets/app.js"');
+    expect(html).not.toContain('href="/assets/app.css"');
+    expect(html).toContain('src="dist/assets/app.js"');
+    expect(html).toContain('href="dist/assets/app.css"');
   });
 
   it('injects scroll and selection URL preview bridges together', async () => {

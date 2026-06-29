@@ -4,6 +4,7 @@ export interface AgentModelPrefs {
 }
 
 export type AgentCliEnvPrefs = Record<string, Record<string, string>>;
+export type AgentCliEnvIntentPrefs = Record<string, { apiKeyOverride?: boolean }>;
 
 export interface TelemetryPrefs {
   metrics?: boolean;
@@ -30,6 +31,7 @@ export interface AppConfigPrefs {
   agentId?: string | null;
   agentModels?: Record<string, AgentModelPrefs>;
   agentCliEnv?: AgentCliEnvPrefs;
+  agentCliEnvIntent?: AgentCliEnvIntentPrefs;
   skillId?: string | null;
   designSystemId?: string | null;
   disabledSkills?: string[];
@@ -50,6 +52,14 @@ export interface AppConfigPrefs {
   projectLocations?: ProjectLocationPrefs[];
   /** Project location id used for new projects when the create request does not choose one explicitly. */
   defaultProjectLocationId?: string | null;
+  /**
+   * Most-recently-used local working directories the user granted the agent
+   * read access to (via the Home composer's working-directory picker). These
+   * become a new project's `metadata.linkedDirs` — the agent perceives them
+   * through `--add-dir`; they are NOT imported into Design Files. Stored
+   * most-recent-first and capped by the daemon.
+   */
+  recentLinkedDirs?: string[];
 }
 
 export interface AppConfigResponse {
@@ -57,3 +67,9 @@ export interface AppConfigResponse {
 }
 
 export type UpdateAppConfigRequest = Partial<AppConfigPrefs>;
+
+/** Response body for `GET /api/recent-dirs` — recent working directories
+ *  pruned to those that still exist on disk, most-recent-first. */
+export interface RecentLinkedDirsResponse {
+  dirs: string[];
+}

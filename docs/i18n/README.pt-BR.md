@@ -1,8 +1,10 @@
 <h1 align="center">Open Design: a alternativa open-source ao Claude Design</h1>
 
-> 🔥 **O Open Design 0.9.0 chegou: crie sem precisar configurar nada.** O [Model Router oficial](https://open-design.ai/amr) está embutido direto no app — sem configuração extra, sem CLI para instalar, sem chave de API para preparar. É só abrir o app, entrar e começar a desenhar e criar na hora. [Baixar 0.9.0](https://github.com/nexu-io/open-design/releases) · [Participar da discussão](https://github.com/nexu-io/open-design/discussions/3524)
+> 🔥 **O Open Design 0.10.0 chegou: o espaço de trabalho de design Agentic tudo-em-um.** Todo o ofício agora vive em uma única janela — vá de uma ideia vaga à descoberta de referências, coleta de material, edição interativa, fila de comentários, polimento de animações e entrega para um editor ou um Code Agent — sem sair do app. Com sessões em paralelo, deixa de parecer um assistente e passa a parecer um time de design local trabalhando para você. [Baixar 0.10.0](https://github.com/nexu-io/open-design/releases) · [Participar da discussão](https://github.com/nexu-io/open-design/discussions/4153)
 >
-> 🏅 **O programa Open Design Fellow está aberto.** Se você também acredita que o design deveria ser aberto — torne-se um Open Design Fellow, ajude a moldar o produto ao lado do time central e contribua para que mais pessoas participem da definição do futuro do design. Detalhes → [`MAINTAINERS.md`](../../MAINTAINERS.md) e [Discord](https://discord.gg/qhbcCH8Am4).
+> ⚡ **Open Design AMR (Agentic Model Router) — o serviço de modelos oficial.** Uma única recarga para usar GPT, Claude, Gemini e DeepSeek dentro do Open Design: mais de 20 modelos de ponta, zero configuração, cobrança pelo uso real de tokens. [Experimentar o AMR](https://open-design.ai/amr/)
+>
+> 🏅 **O programa Open Design Fellow está aberto.** Se você também acredita que o design deveria ser aberto — torne-se um Open Design Fellow, ajude a moldar o produto ao lado do time central e contribua para que mais pessoas participem da definição do futuro do design. Detalhes → [`MAINTAINERS.md`](../../MAINTAINERS.md) e [Discord](https://discord.gg/9ptkbbqRu).
 
 <p align="center">
   <img src="https://repo-assets.open-design.ai/resources/images/hero.png" alt="Open Design — The open-source Claude Design alternative · 150 Design Systems · 261 Plugins · 21 Coding Agents · 14 Media Providers" width="100%" />
@@ -11,14 +13,15 @@
 <p align="center">
   <a href="https://open-design.ai/">Site</a> ·
   <a href="https://open-design.ai/">Download</a> ·
-  <a href="https://discord.gg/qhbcCH8Am4">Discord</a> ·
-  <a href="https://x.com/nexudotio">Siga @nexudotio</a>
+  <a href="https://open-design.ai/amr/">Model Router</a> ·
+  <a href="https://discord.gg/9ptkbbqRu">Discord</a> ·
+  <a href="https://x.com/OpenDesignHQ">Siga @OpenDesignHQ</a>
 </p>
 
 <p align="center">
   <a href="https://github.com/nexu-io/open-design/releases"><img alt="release" src="https://img.shields.io/github/v/release/nexu-io/open-design?style=flat&color=blueviolet&label=release&include_prereleases&display_name=tag" /></a>
   <a href="../../LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat" /></a>
-  <a href="https://discord.gg/qhbcCH8Am4"><img alt="discord" src="https://img.shields.io/discord/1479002485040480266?style=flat&logo=discord&logoColor=white&label=discord&color=5865F2&cacheSeconds=3600" /></a>
+  <a href="https://discord.gg/9ptkbbqRu"><img alt="discord" src="https://img.shields.io/discord/1479002485040480266?style=flat&logo=discord&logoColor=white&label=discord&color=5865F2&cacheSeconds=3600" /></a>
   <a href="QUICKSTART.pt-BR.md"><img alt="quickstart" src="https://img.shields.io/badge/quickstart-3%20commands-green?style=flat" /></a>
 </p>
 
@@ -116,13 +119,13 @@ Dentro do Studio de um projeto, o mesmo design system produz múltiplos tipos de
 | [Cursor](https://www.cursor.com/cli) | ✅ Suportado | `od mcp install cursor` |
 | [VS Code + GitHub Copilot](https://github.com/features/copilot) | ✅ Suportado | `od mcp install copilot` |
 | [GitHub Copilot CLI](https://github.com/features/copilot/cli) | ✅ Suportado | `od mcp install copilot` |
-| Gemini CLI | ✅ Suportado | `od mcp install gemini` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | ✅ Suportado | `od mcp install gemini` |
 | [OpenCode](https://opencode.ai/) | ✅ Suportado | `od mcp install opencode` |
 | [OpenClaw](https://github.com/openclaw/openclaw) | ✅ Suportado | `od mcp install openclaw` |
 | [Antigravity](https://antigravity.google) | ✅ Suportado | `od mcp install antigravity` |
 | [Cline](https://github.com/cline/cline) | ✅ Suportado | `od mcp install cline` |
 | [Trae](https://www.trae.ai/) | ✅ Suportado | `od mcp install trae` |
-| Kimi CLI | ✅ Suportado | `od mcp install kimi` |
+| [Kimi CLI](https://github.com/MoonshotAI/kimi-cli) | ✅ Suportado | `od mcp install kimi` |
 | [Pi Agent](https://github.com/badlogic/pi-mono) | ✅ Suportado | `od mcp install pi` |
 | [Mistral Vibe CLI](https://github.com/mistralai/mistral-vibe) | ✅ Suportado | `od mcp install vibe` |
 | [Hermes Agent](https://github.com/nousresearch/hermes-agent) | ✅ Suportado | `od mcp install hermes` |
@@ -261,7 +264,7 @@ O Open Design (OD) é a alternativa open-source. Mesmo loop, mesmo modelo mental
 
 - 🤖 **Agent-native, agnóstico de modelo.** Não entregamos um agente. O `claude` / `codex` / `cursor-agent` / `copilot` / `hermes` / `kimi` que já está no seu `PATH` é o motor de design. Troque com um clique.
 - 🧠 **Nível profissional de marca por padrão.** Toda renderização lê o `DESIGN.md` ativo — um schema de 9 seções cobrindo paleta, tipografia, espaçamento, motion, voz e anti-padrões. 150 sistemas vêm com o repositório (Linear, Stripe, Vercel, Airbnb, Apple, Tesla, Notion, Anthropic, Cursor, Supabase, Figma…). Solte uma pasta e o seletor a encontra.
-- 🖥️ **Local-first, BYOK em todas as camadas.** Apps de desktop nativos para macOS (Apple Silicon + Intel) e Windows (x64). AppImage de Linux na trilha de release opcional. SQLite em `.od/app.sqlite`, arquivos em `.od/projects/<id>/`, sem telemetria, sem ida e volta à nuvem.
+- 🖥️ **Local-first, BYOK em todas as camadas.** Apps de desktop nativos continuam local-first, sem ida e volta à nuvem. Antes de descrever caminhos de dados do daemon, você DEVE ler o `AGENTS.md` na raiz, seção **Daemon data directory contract**.
 - 🌍 **Componível em três planos.** **Plugins** carregam fluxos de trabalho executáveis · **skills** carregam o gosto de design do agente · **design systems** carregam a marca. Todos os três são arquivos simples que qualquer pessoa pode escrever, versionar e publicar.
 - 🔁 **Renove uma base de código existente.** Entregue um repositório `git` + `DESIGN.md` ao agente e ele refatora seus componentes reais para a especificação de marca. Plugins dedicados migram fluxos do Figma / Pencil para código React / Next.js / Vue.
 - 🔒 **Privacidade por convicção.** Tudo roda onde seus dados vivem — seu laptop, o servidor do seu time, seu projeto na Vercel. Quando a rede é necessária, o proxy BYOK é protegido contra SSRF.
@@ -299,7 +302,7 @@ Você pode usar o Open Design sem nunca abrir a GUI — chame-o como skill, plug
 
 ```bash
 # One-line install into the agent you're using:
-curl -fsSL https://open-design.ai/install.sh | sh -s <agent>
+od mcp install <agent>
 # <agent> = claude | codex | cursor | copilot | openclaw | antigravity | gemini
 #         | pi | vibe | hermes | cline | kimi | trae | opencode
 ```
@@ -322,6 +325,12 @@ echo "OD_API_TOKEN=$(openssl rand -hex 32)" >> .env
 docker compose up -d
 # open http://localhost:7456
 ```
+
+### 🚀 Implante no Sealos
+
+[![Deploy on Sealos](https://sealos.io/Deploy-on-Sealos.svg)](https://sealos.io/products/app-store/open-design/)
+
+O template da Sealos App Store executa a imagem Docker publicada do Open Design com armazenamento persistente para o workspace e Basic Auth no proxy público. Para implantações Docker públicas ou compartilhadas personalizadas, siga as orientações de proxy reverso e `OPEN_DESIGN_ALLOWED_ORIGINS` em [`deploy/README.md`](../../deploy/README.md#local-compose).
 
 ### 🧑‍💻 Rode a partir do código-fonte
 
@@ -352,7 +361,7 @@ O Open Design entrega um **servidor MCP stdio** e **scripts de instalação** po
 
 ```bash
 # One-line install (16+ CLIs supported):
-curl -fsSL https://open-design.ai/install.sh | sh -s <agent>
+od mcp install <agent>
 
 # Then the agent can:
 od search-files "primary button"      # search files across projects
@@ -533,7 +542,7 @@ Endpoint do registry de plugins: `GET /api/plugins`. Visão geral do diretório 
    │  /api/import/claude-design      │
    │  MCP stdio server                │
    └─────────┬───────────────────────┘
-             │ spawn(cli, [...], { cwd: .od/projects/<id> })
+             │ spawn(cli, [...], { cwd: managed project cwd })
              ▼
    ┌──────────────────────────────────────────────────────────────────┐
    │  claude · codex · cursor-agent · copilot · openclaw · antigravity ·│
@@ -547,7 +556,7 @@ Endpoint do registry de plugins: `GET /api/plugins`. Visão geral do diretório 
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
 | Daemon | Node 24 · Express · streaming SSE · `better-sqlite3` |
-| Armazenamento | Arquivos em `.od/projects/<id>/` + SQLite em `.od/app.sqlite` + `media-config.json` (no gitignore, criado automaticamente). `OD_DATA_DIR` realoca tudo. |
+| Armazenamento | Antes de alterar ou documentar caminhos de armazenamento do daemon, você DEVE ler o `AGENTS.md` na raiz, seção **Daemon data directory contract**. Este README NÃO DEVE repeti-lo. |
 | Preview | Iframe `srcdoc` em sandbox + parser de `<artifact>` em streaming |
 | Exportação | HTML (embutido) · PDF (impressão do navegador) · PPTX (conduzido pelo agente) · ZIP · Markdown · MP4 (HyperFrames) |
 | Desktop | Electron shell + renderer em sandbox + IPC sidecar (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |
@@ -585,8 +594,8 @@ Entrega faseada → [`docs/roadmap.md`](../../docs/roadmap.md).
 
 Pessoas de verdade por trás de cada canal.
 
-- 💬 **Discord** — chat diário, compartilhamento de plugins, perguntas → [**discord.gg/qhbcCH8Am4**](https://discord.gg/qhbcCH8Am4)
-- 🐦 **X / Twitter** — notas de release, marcos, bastidores → [**@nexudotio**](https://x.com/nexudotio)
+- 💬 **Discord** — chat diário, compartilhamento de plugins, perguntas → [**discord.gg/9ptkbbqRu**](https://discord.gg/9ptkbbqRu)
+- 🐦 **X / Twitter** — notas de release, marcos, bastidores → [**@OpenDesignHQ**](https://x.com/OpenDesignHQ)
 - 🗣️ **GitHub Discussions** — Q&A aprofundado, RFCs, "mostre seu trabalho" → [**Discussions**](https://github.com/nexu-io/open-design/discussions)
 - 🐛 **GitHub Issues** — relatos de bugs, pedidos de features → [**Issues**](https://github.com/nexu-io/open-design/issues)
 
@@ -635,7 +644,7 @@ Fluxo completo de contribuição amigável a agentes, estilo de código e barra 
 
 ### 🏅 Programa Open Design Fellow
 
-Estamos recrutando **Open Design Fellows** ao redor do mundo — os Fellows moldam o produto ao lado do time central, representam oficialmente o Open Design em sua região e fazem a comunidade crescer localmente, com suporte financiado ($1,000 / MR), créditos gratuitos de LLM e uma trilha de revisão direta. Detalhes → [`MAINTAINERS.md`](../../MAINTAINERS.md) e o anúncio no [Discord](https://discord.gg/qhbcCH8Am4).
+Estamos recrutando **Open Design Fellows** ao redor do mundo — os Fellows moldam o produto ao lado do time central, representam oficialmente o Open Design em sua região e fazem a comunidade crescer localmente, com suporte financiado ($1,000 / MR), créditos gratuitos de LLM e uma trilha de revisão direta. Detalhes → [`MAINTAINERS.md`](../../MAINTAINERS.md) e o anúncio no [Discord](https://discord.gg/9ptkbbqRu).
 
 ---
 
@@ -669,7 +678,7 @@ Regras dos mantenedores, critérios de promoção e o protocolo de saída → [`
 Obrigado a todas as pessoas que participaram — código, docs, feedback, uma issue afiada, uma nova skill, um novo design system.
 
 <a href="https://github.com/nexu-io/open-design/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=nexu-io/open-design&max=500&columns=20&anon=1&cache_bust=2026-05-30" alt="Open Design contributors" />
+  <img src="https://contrib.rocks/image?repo=nexu-io/open-design&max=500&columns=20&anon=1&cache_bust=2026-06-29" alt="Open Design contributors" />
 </a>
 
 ---
@@ -694,9 +703,9 @@ Se isto te poupou trinta minutos, dê um ★. Estrelas não pagam o aluguel — 
 
 <a href="https://star-history.com/#nexu-io/open-design&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&theme=dark&cache_bust=2026-05-28" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-05-28" />
-    <img alt="Open Design star history" src="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-05-28" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&theme=dark&cache_bust=2026-06-29" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-06-29" />
+    <img alt="Open Design star history" src="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-06-29" />
   </picture>
 </a>
 

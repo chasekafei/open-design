@@ -15,6 +15,12 @@ export interface BrowserElementSnapshot {
   selectionKind?: 'element';
 }
 
+export interface BrowserMeasureTargetRequest {
+  elementId: string;
+  key: string;
+  selector: string;
+}
+
 export interface BrowserViewportPreset {
   id: BrowserViewportId;
   label: string;
@@ -82,6 +88,48 @@ export const BROWSER_SERIALIZE_HTML_SCRIPT = `
     ? '<!DOCTYPE ' + document.doctype.name + '>'
     : '<!doctype html>';
   return doctype + '\\n' + document.documentElement.outerHTML;
+})()
+`;
+
+// Collect a CSS digest from a rendered page for the brand harvest: readable
+// stylesheet rules PLUS a computed-style sweep. The computed sweep matters
+// because cross-origin stylesheets (CDN-hosted, Google Fonts) throw on
+// `cssRules`, so their colors/fonts would otherwise be invisible — but
+// getComputedStyle resolves them on every element regardless of origin. The
+// daemon's regex harvest (extractColors / extractFonts) reads the resulting
+// `color:` / `background-color:` / `font-family:` declarations, and the
+// frequency of repeated computed colors usefully ranks the real palette.
+export const BROWSER_SERIALIZE_STYLES_SCRIPT = `
+(() => {
+  const out = [];
+  for (const sheet of Array.from(document.styleSheets || [])) {
+    try {
+      const rules = sheet.cssRules;
+      if (!rules) continue;
+      for (const rule of Array.from(rules)) {
+        if (rule && rule.cssText) out.push(rule.cssText);
+      }
+    } catch (_) {
+      // Cross-origin stylesheet — rules are not readable; computed styles cover it.
+    }
+  }
+  try {
+    const TRANSPARENT = new Set(['rgba(0, 0, 0, 0)', 'transparent', '']);
+    const els = Array.from(document.querySelectorAll('body *')).slice(0, 2500);
+    for (const el of els) {
+      const cs = window.getComputedStyle(el);
+      if (!cs) continue;
+      const decl = [];
+      if (cs.color) decl.push('color:' + cs.color);
+      if (!TRANSPARENT.has(cs.backgroundColor)) decl.push('background-color:' + cs.backgroundColor);
+      if (!TRANSPARENT.has(cs.borderTopColor)) decl.push('border-color:' + cs.borderTopColor);
+      if (cs.fontFamily) decl.push('font-family:' + cs.fontFamily);
+      if (decl.length) out.push('x{' + decl.join(';') + '}');
+    }
+  } catch (_) {
+    // getComputedStyle unavailable — fall back to whatever sheet rules we got.
+  }
+  return out.join('\\n');
 })()
 `;
 
@@ -237,6 +285,74 @@ export function browserElementPickerScript(filePath: string): string {
   document.addEventListener('click', onClick, true);
   document.addEventListener('keydown', onKeyDown, true);
 }))()
+`;
+}
+
+export function browserMeasureTargetsScript(
+  filePath: string,
+  targets: BrowserMeasureTargetRequest[],
+): string {
+  return `
+(() => {
+  const filePath = ${JSON.stringify(filePath)};
+  const targets = ${JSON.stringify(targets)};
+  function visibleRect(el) {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return null;
+    const rect = el.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    return rect;
+  }
+  function styleSnapshot(el) {
+    const s = window.getComputedStyle(el);
+    return {
+      color: s.color,
+      backgroundColor: s.backgroundColor,
+      fontSize: s.fontSize,
+      fontWeight: s.fontWeight,
+      lineHeight: s.lineHeight,
+      textAlign: s.textAlign,
+      fontFamily: s.fontFamily,
+      paddingTop: s.paddingTop,
+      paddingRight: s.paddingRight,
+      paddingBottom: s.paddingBottom,
+      paddingLeft: s.paddingLeft,
+      borderRadius: s.borderRadius
+    };
+  }
+  function snapshotFor(target) {
+    let el = null;
+    try { el = document.querySelector(String(target.selector || '')); } catch (_) { el = null; }
+    const rect = visibleRect(el);
+    if (!el || !rect) return null;
+    const tag = el.tagName ? el.tagName.toLowerCase() : 'element';
+    const cls = typeof el.className === 'string' && el.className.trim()
+      ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.')
+      : '';
+    let htmlHint = '';
+    try {
+      const match = String(el.outerHTML || '').replace(/\\s+/g, ' ').match(/^<[^>]+>/);
+      htmlHint = match ? match[0] : '';
+    } catch (_) {}
+    return {
+      key: String(target.key || ''),
+      filePath,
+      elementId: String(target.elementId || ''),
+      selector: String(target.selector || ''),
+      label: tag + cls,
+      text: String(el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 240),
+      position: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      },
+      htmlHint: htmlHint.slice(0, 220),
+      style: styleSnapshot(el),
+      selectionKind: 'element'
+    };
+  }
+  return targets.map(snapshotFor).filter(Boolean);
+})()
 `;
 }
 

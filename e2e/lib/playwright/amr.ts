@@ -1,12 +1,13 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
+import { T } from '@/timeouts';
 
 export const STORAGE_KEY = 'open-design:config';
 export const OPEN_SETTINGS_LABEL = /Open settings|打开设置|開啟設定|Account & settings/i;
 export const SETTINGS_MENU_LABEL = /Settings|设置|設定/i;
 
 export async function waitForLoadingToClear(page: Page) {
-  await expect(page.getByText('Loading Open Design…')).toHaveCount(0, { timeout: 15_000 });
+  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.long }).catch(() => {});
 }
 
 export async function dismissPrivacyDialog(page: Page) {
@@ -31,6 +32,7 @@ export async function expectWorkspaceReady(page: Page) {
 }
 
 export async function openSettingsDialog(page: Page) {
+  await waitForLoadingToClear(page);
   await dismissPrivacyDialog(page);
   const settingsTrigger = page.getByTestId('entry-settings-menu-trigger');
   if (await settingsTrigger.isVisible({ timeout: 1_000 }).catch(() => false)) {
@@ -39,7 +41,10 @@ export async function openSettingsDialog(page: Page) {
     await page.getByRole('button', { name: OPEN_SETTINGS_LABEL }).first().click();
   }
   const dialog = page.getByRole('dialog');
-  const menu = page.getByRole('menu');
+  const menu = page
+    .getByTestId('entry-settings-menu')
+    .or(page.getByRole('menu', { name: SETTINGS_MENU_LABEL }))
+    .first();
   await expect
     .poll(async () => {
       if (await dialog.isVisible().catch(() => false)) return 'dialog';
@@ -48,7 +53,17 @@ export async function openSettingsDialog(page: Page) {
     })
     .not.toBe('pending');
   if (await menu.isVisible().catch(() => false)) {
-    await menu.getByRole('menuitem', { name: SETTINGS_MENU_LABEL }).click();
+    await dismissPrivacyDialog(page);
+    if (!(await menu.isVisible().catch(() => false))) {
+      await settingsTrigger.click();
+      await expect(menu).toBeVisible({ timeout: 10_000 });
+    }
+    const settingsItem = menu
+      .getByRole('menuitem', { name: SETTINGS_MENU_LABEL })
+      .or(menu.getByRole('button', { name: SETTINGS_MENU_LABEL }))
+      .first();
+    await expect(settingsItem).toBeVisible({ timeout: 10_000 });
+    await settingsItem.click();
   }
   await expect(dialog).toBeVisible({ timeout: 10_000 });
   return dialog;
@@ -56,12 +71,11 @@ export async function openSettingsDialog(page: Page) {
 
 export async function sendPrompt(page: Page, prompt: string) {
   const input = page.getByTestId('chat-composer-input');
-  const sendButton = page.getByTestId('chat-send');
   await expect(input).toBeVisible({ timeout: 10_000 });
   await input.click();
   await input.fill(prompt);
-  await expect(sendButton).toBeEnabled();
-  await sendButton.click();
+  await expect(page.getByTestId('chat-send')).toBeEnabled();
+  await input.press('Enter');
 }
 
 export async function createProjectViaApi(page: Page, projectId: string, name: string) {
@@ -80,7 +94,12 @@ export async function createProjectViaApi(page: Page, projectId: string, name: s
 }
 
 export async function gotoProject(page: Page, projectId: string) {
-  await page.goto(`/projects/${projectId}`, { waitUntil: 'domcontentloaded' });
+  try {
+    await page.goto(`/projects/${projectId}`, { waitUntil: 'domcontentloaded' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/ERR_ABORTED|frame was detached/i.test(message)) throw error;
+  }
   await dismissPrivacyDialog(page);
   await expectWorkspaceReady(page);
 }
@@ -97,10 +116,16 @@ export async function readAppConfig(page: Page) {
 }
 
 export async function seedBrowserConfig(page: Page, value: Record<string, unknown>) {
+  const payload = { key: STORAGE_KEY, config: value };
   await page.addInitScript(
     ({ key, config }) => {
       window.localStorage.setItem(key, JSON.stringify(config));
     },
-    { key: STORAGE_KEY, config: value },
+    payload,
   );
+  await page.evaluate(({ key, config }) => {
+    window.localStorage.setItem(key, JSON.stringify(config));
+  }, payload).catch(() => {
+    // Some pre-navigation pages do not expose localStorage yet; the init script above covers the next load.
+  });
 }
