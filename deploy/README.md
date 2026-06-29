@@ -4,6 +4,10 @@ This deployment ships Open Design as a single Alpine-based runtime image. The
 daemon serves both the API and the built Next.js static export, so there is no
 separate nginx container.
 
+**Railway / public-direct deploy (this fork):** see [RAILWAY.md](./RAILWAY.md) for
+branch workflow, env vars (`OD_ALLOWED_ORIGINS` vs `OPEN_DESIGN_ALLOWED_ORIGINS`),
+Dockerfile overlays, and what to preserve when merging upstream `main`.
+
 ## Local compose
 
 Before starting:
