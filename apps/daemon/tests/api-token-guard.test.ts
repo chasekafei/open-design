@@ -28,6 +28,7 @@ import { startServer } from '../src/server.js';
 const PREVIOUS_TOKEN = process.env.OD_API_TOKEN;
 const PREVIOUS_HOST  = process.env.OD_BIND_HOST;
 const PREVIOUS_DISABLE_API_AUTH = process.env.OD_DISABLE_API_AUTH;
+const PREVIOUS_ALLOWED_ORIGINS = process.env.OD_ALLOWED_ORIGINS;
 
 let server: http.Server | undefined;
 let baseUrl = '';
@@ -47,6 +48,8 @@ afterEach(async () => {
   else process.env.OD_BIND_HOST = PREVIOUS_HOST;
   if (PREVIOUS_DISABLE_API_AUTH === undefined) delete process.env.OD_DISABLE_API_AUTH;
   else process.env.OD_DISABLE_API_AUTH = PREVIOUS_DISABLE_API_AUTH;
+  if (PREVIOUS_ALLOWED_ORIGINS === undefined) delete process.env.OD_ALLOWED_ORIGINS;
+  else process.env.OD_ALLOWED_ORIGINS = PREVIOUS_ALLOWED_ORIGINS;
 });
 
 describe('bound-API-token guard', () => {
@@ -108,6 +111,16 @@ describe('bearer middleware', () => {
       const resp = await fetch(`${baseUrl}${path}`);
       expect(resp.status).toBe(200);
     }
+  });
+
+  it('lets same-origin browser SSE clients open project events without a bearer', async () => {
+    const origin = new URL(baseUrl).origin;
+    process.env.OD_ALLOWED_ORIGINS = origin;
+    const resp = await fetch(`${baseUrl}/api/projects/missing-project/events`, {
+      headers: { origin },
+    });
+    expect(resp.status).not.toBe(401);
+    expect(resp.status).toBe(404);
   });
 
   it('lets file viewer HTML previews load with Origin: null (sandboxed iframe)', async () => {

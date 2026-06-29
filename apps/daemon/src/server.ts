@@ -3478,6 +3478,7 @@ export async function startServer({
     // callers (no Origin) still fall through to the bearer check below,
     // so curl/CLI agents must continue to present the token.
     const ssePathSet = new Set(['/memory/events']);
+    const projectEventsPathRe = /^\/projects\/[^/]+\/events$/u;
     // Plugin preview iframes cannot carry Authorization either — the
     // browser navigates the iframe via `src` and the per-Fetch-spec
     // request is unprivileged. The plugin routes are safe-by-design
@@ -3497,9 +3498,9 @@ export async function startServer({
     app.use('/api', (req, res, next) => {
       if (openProbePaths.has(req.path)) return next();
       if (
-        ssePathSet.has(req.path) &&
         req.method === 'GET' &&
-        isLocalSameOrigin(req, resolvedPort)
+        isLocalSameOrigin(req, resolvedPort) &&
+        (ssePathSet.has(req.path) || projectEventsPathRe.test(req.path))
       ) {
         return next();
       }
