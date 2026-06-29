@@ -77,6 +77,7 @@ RUN pnpm --filter @open-design/daemon build && \
 # differs from the repo root (Railway, CI runners with a subdirectory
 # context, etc.).
 COPY skills ./skills
+COPY design-templates ./design-templates
 COPY design-systems ./design-systems
 COPY craft ./craft
 COPY prompt-templates ./prompt-templates
@@ -102,6 +103,7 @@ WORKDIR /app
 COPY --from=build --chown=open-design:open-design /app/deploy/daemon ./apps/daemon
 COPY --from=build --chown=open-design:open-design /app/apps/web/out ./apps/web/out
 COPY --from=build --chown=open-design:open-design /app/skills ./skills
+COPY --from=build --chown=open-design:open-design /app/design-templates ./design-templates
 COPY --from=build --chown=open-design:open-design /app/design-systems ./design-systems
 COPY --from=build --chown=open-design:open-design /app/craft ./craft
 COPY --from=build --chown=open-design:open-design /app/prompt-templates ./prompt-templates
