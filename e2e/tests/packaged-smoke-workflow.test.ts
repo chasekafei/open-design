@@ -714,6 +714,10 @@ describe("packaged smoke workflow", () => {
 
     expect(postMergeWorkflow).toContain("permissions:\n  contents: write");
     expect(postMergeWorkflow).toContain("CLOUDFLARE_R2_REPOSITORY_ASSETS_AK");
+    expect(postMergeWorkflow).toContain("Detect whether the trusted publish path is available");
+    expect(postMergeWorkflow).toContain('echo "publish=false" >> "$GITHUB_OUTPUT"');
+    expect(postMergeWorkflow).toContain("upload: ${{ github.ref == 'refs/heads/main' && steps.trusted.outputs.publish == 'true' }}");
+    expect(postMergeWorkflow).toContain("if: ${{ github.ref == 'refs/heads/main' && steps.trusted.outputs.publish == 'true' }}");
     // The write-capable credential the PR path lacks lives here post-merge. The rolling manifest PR
     // is now authored with the release-bot App (so its push triggers CI and the auto-merge reactor
     // can act), replacing the never-configured PREVIEW_BAKE_TOKEN fallback.
