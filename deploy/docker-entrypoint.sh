@@ -25,8 +25,35 @@ mkdir -p "$DATA_DIR" \
 # (same rationale as praveen-ks-2001/hermes-agent-template).
 printf 'docker\n' > "$HERMES_HOME/.install_method"
 
-if [ ! -f "$HERMES_HOME/config.yaml" ] && [ -f /opt/hermes-agent/cli-config.yaml.example ]; then
-  cp /opt/hermes-agent/cli-config.yaml.example "$HERMES_HOME/config.yaml"
+# Seed a minimal config only when missing. Do NOT copy cli-config.yaml.example
+# — that file defaults to OpenRouter + anthropic/claude-opus and will make
+# `hermes acp` exit(1) on a custom OpenAI relay that does not host those models.
+if [ ! -f "$HERMES_HOME/config.yaml" ]; then
+  if [ -n "${OPENAI_BASE_URL:-}" ]; then
+    model_name="${HERMES_MODEL:-}"
+    if [ -z "$model_name" ]; then
+      # Prefer an explicit relay model; gpt-4o-mini is a common OD default
+      # that many third-party groups reject (see memory-llm 404s).
+      model_name="gpt-4o"
+    fi
+    cat > "$HERMES_HOME/config.yaml" <<EOF
+model:
+  provider: custom
+  default: ${model_name}
+  base_url: ${OPENAI_BASE_URL}
+EOF
+  elif [ -n "${ANTHROPIC_API_KEY:-}${ANTHROPIC_AUTH_TOKEN:-}" ]; then
+    cat > "$HERMES_HOME/config.yaml" <<EOF
+model:
+  provider: anthropic
+  default: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
+EOF
+  else
+    cat > "$HERMES_HOME/config.yaml" <<EOF
+model:
+  provider: auto
+EOF
+  fi
 fi
 [ ! -f "$HERMES_HOME/.env" ] && touch "$HERMES_HOME/.env"
 

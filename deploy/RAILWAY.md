@@ -58,8 +58,18 @@ git push origin railway-deploy
 ```bash
 OPENAI_API_KEY=sk-你的中转key
 OPENAI_BASE_URL=https://你的中转域名/v1
-# 可选：固定到 Volume（entrypoint 默认已是 $OD_DATA_DIR/hermes）
-# HERMES_HOME=/app/.od/hermes
+# 必填（对多数第三方分组）：中转实际支持的对话模型 id，不要用 gpt-4o-mini
+# 除非你的分组明确开通了它。entrypoint 会写入 $HERMES_HOME/config.yaml。
+HERMES_MODEL=你的中转模型名
+# 可选：记忆抽取默认也是 gpt-4o-mini，中转不支持时会打 [memory-llm] 404（不影响主对话，但日志吵）
+# OD_MEMORY_MODEL=你的中转模型名
+```
+
+若 Volume 里已经有一份错误的 `config.yaml`（旧 entrypoint 从 OpenRouter 示例复制的），**不会自动覆盖**。在 Railway shell 里删掉后重启，或手改：
+
+```bash
+rm -f "$OD_DATA_DIR/hermes/config.yaml"   # 默认 /app/.od/hermes/config.yaml
+# 重启服务后 entrypoint 会按 OPENAI_* + HERMES_MODEL 重新播种
 ```
 
 UI 里把 Agent 切到 **Hermes**。模型名可用 `hermes config set model <name>`（写入 Volume）或依赖 UI 模型列表。
