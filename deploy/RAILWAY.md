@@ -105,7 +105,7 @@ UI 里把 Agent 切到 **Hermes**。
 2. **构建阶段分层** — 先 `pnpm install` 再 `COPY apps`，避免 web 改动击穿依赖缓存（`9a92fcdf8` 起）
 3. **Stage-2 资源复制** — 除 `skills/`、`design-systems/`、`craft/`、`plugins/_official/` 外，必须包含：
    - **`design-templates/`**（`6fd17710a`）— agent 读取 `web-prototype` 等模板种子；缺了会「找不到技能侧文件」
-4. **运行时** — `tini` + `gosu`（替代 alpine `su-exec`）+ `bash` + `git` + **全局 Claude Code** + **Hermes（`/opt/hermes-venv`）**
+4. **运行时** — `tini` + `gosu`（替代 alpine `su-exec`）+ `bash` + `git` + **全局 Claude Code** + **Hermes（`/opt/hermes-venv`，`pip install -e '.[acp,vision]'`）**
 5. **`OD_BIND_HOST=0.0.0.0`**、`EXPOSE 7456`
 6. **Entrypoint** — `deploy/docker-entrypoint.sh`：对 `OD_DATA_DIR` `chown`、播种 `HERMES_HOME`、再 `gosu open-design` 跑 daemon
 

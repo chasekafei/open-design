@@ -125,13 +125,15 @@ RUN npm install -g @anthropic-ai/claude-code && \
 #     (uv-managed Pythons under /root are not readable after gosu)
 #   * skip React dashboard / messaging gateway extras — OD only needs
 #     `hermes acp --accept-hooks`
+#   * include [acp] (agent-client-protocol deps — without this, `hermes acp`
+#     exits immediately with "ACP dependencies not installed")
 #   * include vision (Pillow) so oversized images don't brick sessions
 COPY --from=ghcr.io/astral-sh/uv:python3.12-bookworm-slim /usr/local/bin/uv /usr/local/bin/uv
 RUN git clone --depth 1 --branch "${HERMES_REF}" \
       https://github.com/NousResearch/hermes-agent.git /opt/hermes-agent && \
     cd /opt/hermes-agent && \
     uv venv /opt/hermes-venv --python /usr/bin/python3 && \
-    uv pip install --python /opt/hermes-venv/bin/python --no-cache -e ".[vision]" && \
+    uv pip install --python /opt/hermes-venv/bin/python --no-cache -e ".[acp,vision]" && \
     printf 'docker\n' > /opt/hermes-agent/.install_method && \
     ln -sf /opt/hermes-venv/bin/hermes /usr/local/bin/hermes && \
     hermes --version && \
