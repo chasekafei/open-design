@@ -1451,6 +1451,27 @@ test('attachAcpSession resumes via session/load when resumeSessionId is set', ()
   assert.equal(requests.some((entry) => entry.method === 'session/new'), false);
 });
 
+test('attachAcpSession includes child stderr when the process exits early', () => {
+  const child = new FakeAcpChild();
+  const events: Array<{ event: string; payload: unknown }> = [];
+
+  attachAcpSession({
+    child: child as never,
+    prompt: 'hello',
+    cwd: '/tmp/od-project',
+    send: (event, payload) => events.push({ event, payload }),
+  });
+
+  child.stderr.write('No API key found for provider openai-api\n');
+  child.emit('close', 1, null);
+
+  const errorEvents = events.filter((entry) => entry.event === 'error');
+  assert.equal(errorEvents.length, 1);
+  const message = String((errorEvents[0]?.payload as { message?: string } | undefined)?.message ?? '');
+  assert.match(message, /ACP session exited before completion \(code=1, signal=none\)/);
+  assert.match(message, /No API key found for provider openai-api/);
+});
+
 test('attachAcpSession captures the durable session handle from the result', () => {
   const child = new FakeAcpChild();
   const session = attachAcpSession({

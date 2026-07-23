@@ -121,6 +121,50 @@ fi
 
 [ ! -f "$HERMES_HOME/.env" ] && touch "$HERMES_HOME/.env"
 
+# Hermes docs put openai-api credentials in $HERMES_HOME/.env (not only the
+# process environment). Keep those keys in sync with Railway Variables every
+# boot so ACP runs see the same OPENAI_* the daemon inherited.
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+path = Path(os.environ["HERMES_HOME"]) / ".env"
+existing = path.read_text(encoding="utf-8") if path.exists() else ""
+keys = (
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_MODEL",
+)
+managed = {k: (os.environ.get(k) or "").strip() for k in keys}
+lines = []
+seen = set()
+for raw in existing.splitlines():
+    if not raw or raw.lstrip().startswith("#") or "=" not in raw:
+        lines.append(raw)
+        continue
+    name, _, _rest = raw.partition("=")
+    name = name.strip()
+    if name in managed:
+        seen.add(name)
+        value = managed[name]
+        if value:
+            lines.append(f"{name}={value}")
+        # Drop empty managed keys so a cleared Railway var does not leave a stale value.
+        continue
+    lines.append(raw)
+for name, value in managed.items():
+    if value and name not in seen:
+        lines.append(f"{name}={value}")
+text = "\n".join(lines).rstrip() + ("\n" if lines else "")
+path.write_text(text, encoding="utf-8")
+synced = [k for k, v in managed.items() if v]
+if synced:
+    print(f"[open-design] hermes .env synced keys={','.join(synced)}", flush=True)
+PY
+
 # Clear stale gateway PID if a previous container left one on the volume.
 rm -f "$HERMES_HOME/gateway.pid"
 

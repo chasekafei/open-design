@@ -68,6 +68,7 @@ entrypoint 行为：
 
 1. 若没有 `config.yaml`，或发现是旧版「只有几行 model」的 stub → 从上游完整 `cli-config.yaml.example` 复制（保留 `agent.reasoning_effort: medium` 等全部默认项）
 2. 再只改 `model.provider` / `model.default` / `model.base_url`：有 `OPENAI_BASE_URL` 时用 **`openai-api`**（不是 `custom`）
+3. 每次启动把 Railway 的 `OPENAI_API_KEY` / `OPENAI_BASE_URL`（以及可选的 `ANTHROPIC_*`）同步进 `$HERMES_HOME/.env`（Hermes `openai-api` 官方文档要求密钥在该文件里）
 
 若 Volume 里已是完整但错误的配置（例如仍指向 OpenRouter），不会自动改；可删掉后让 entrypoint 重播：
 

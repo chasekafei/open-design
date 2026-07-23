@@ -934,6 +934,16 @@ export function attachAcpSession({
   }
   const stdin = child.stdin;
   const stdout = child.stdout;
+  // Buffer child stderr so early exits (common for hermes/ACP agents that
+  // fail auth or config before any JSON-RPC reply) surface the real reason
+  // instead of only "ACP session exited before completion (code=1)".
+  let stderrBuf = '';
+  if (child.stderr) {
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      stderrBuf = `${stderrBuf}${chunk}`.slice(-16_000);
+    });
+  }
   let expectedId = 1;
   let nextId = 2;
   let promptRequestId: JsonRpcId | null = null;
@@ -1588,7 +1598,14 @@ export function attachAcpSession({
     clearStageTimer();
     parser.flush();
     if (!finished && !aborted && !fatal) {
-      fail(`ACP session exited before completion (code=${code ?? 'null'}, signal=${signal ?? 'none'})`);
+      const errTail = stderrBuf.trim();
+      if (errTail) {
+        console.error(`[acp] child exited code=${code ?? 'null'} signal=${signal ?? 'none'} stderr=\n${errTail}`);
+      }
+      const suffix = errTail ? ` stderr=${errTail}` : '';
+      fail(
+        `ACP session exited before completion (code=${code ?? 'null'}, signal=${signal ?? 'none'})${suffix}`,
+      );
     }
   });
   child.on('error', (err: Error) => fail(err.message));
