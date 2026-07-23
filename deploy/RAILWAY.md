@@ -29,7 +29,7 @@ git push origin railway-deploy
 | 暴露方式 | localhost + 反向代理注入 `Authorization` | 容器直接 `0.0.0.0:7456`，浏览器直连 HTTPS |
 | API 鉴权 | 代理统一带 Bearer，或 `OD_DISABLE_API_AUTH=1` | `OD_API_TOKEN` + **HTML 注入** `window.fetch` 包装 |
 | 允许来源 | Compose 将 `OPEN_DESIGN_ALLOWED_ORIGINS` 映射为 `OD_ALLOWED_ORIGINS` | Railway **无 compose 层**，必须直接设 `OD_ALLOWED_ORIGINS` |
-| Agent | 宿主机 CLI | 镜像内安装 `@anthropic-ai/claude-code` |
+| Agent | 宿主机 CLI | 镜像内安装 `@anthropic-ai/claude-code` + **Hermes**（`HERMES_REF` 钉版本） |
 
 ---
 
@@ -43,14 +43,32 @@ git push origin railway-deploy
 | `OD_PORT` | 是 | `7456`，且 **Networking 公网端口须与之一致**（或用 `${{PORT}}` 时 daemon 也要跟 Railway 分配的端口一致） |
 | `OD_API_TOKEN` | 是 | `openssl rand -hex 32`；浏览器通过注入脚本带 Bearer |
 | `OD_ALLOWED_ORIGINS` | 是 | 精确浏览器 Origin，如 `https://your-app.up.railway.app`（无尾斜杠） |
-| `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` 等 | 视供应商 | 驱动容器内 Claude Code |
+| `OD_DATA_DIR` | 建议 | 持久卷挂载点（默认 `/app/.od`）；entrypoint 会 `chown`、并在其下播种 `hermes/` |
+| `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` | 视供应商 | 驱动容器内 **Claude Code**（Anthropic 兼容口） |
 | `CLAUDE_BIN` | 可选 | Dockerfile 已设 `/usr/local/bin/claude` |
-| `OD_DATA_DIR` | 可选 | 持久卷挂载点；entrypoint 会 `chown` 后降权运行 |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` | 视供应商 | 驱动容器内 **Hermes** 的自定义 OpenAI 兼容中转（见下） |
+| `HERMES_BIN` | 可选 | Dockerfile 已设 `/usr/local/bin/hermes` |
+| `HERMES_HOME` | 可选 | 默认 `${OD_DATA_DIR}/hermes`；entrypoint 会重映射并播种目录 |
+| `HERMES_REF` | 构建期 | Docker build-arg，默认 `v2026.7.20`；在 Railway 设为 build arg 可升级 Hermes 而无需改 Dockerfile |
+
+### Hermes（OpenAI 中转）推荐变量
+
+镜像已内置 Hermes CLI（安装方式对齐 [hermes-agent-template](https://github.com/praveen-ks-2001/hermes-agent-template)：pinned git ref + `uv` editable install）。Redeploy 不会丢二进制；**密钥必须放 Railway Variables**，配置/会话放 Volume：
+
+```bash
+OPENAI_API_KEY=sk-你的中转key
+OPENAI_BASE_URL=https://你的中转域名/v1
+# 可选：固定到 Volume（entrypoint 默认已是 $OD_DATA_DIR/hermes）
+# HERMES_HOME=/app/.od/hermes
+```
+
+UI 里把 Agent 切到 **Hermes**。模型名可用 `hermes config set model <name>`（写入 Volume）或依赖 UI 模型列表。
 
 **不要混淆：**
 
 - `OPEN_DESIGN_ALLOWED_ORIGINS` → 仅 docker-compose 模板变量，**Railway 无效**
 - `OD_DISABLE_API_AUTH=1` → 会关闭全部 Bearer 校验，仅适合有其它网关鉴权的环境，Railway 直连不要用
+- Hermes 的 `OPENAI_*` 与 Claude Code 的 `ANTHROPIC_*` 互不影响；可同时留在镜像里，按 UI 所选 agent 生效
 
 ---
 
@@ -58,12 +76,13 @@ git push origin railway-deploy
 
 相对上游 GHCR 镜像 / 旧版 fork Dockerfile，**必须保留**的 Railway 相关层：
 
-1. **构建阶段分层** — 先 `pnpm install` 再 `COPY apps`，避免 web 改动击穿依赖缓存（`9a92fcdf8` 起）
-2. **Stage-2 资源复制** — 除 `skills/`、`design-systems/`、`craft/`、`plugins/_official/` 外，必须包含：
+1. **构建 + 运行时均为 `node:24-bookworm-slim`（glibc）** — 不要混用 alpine 构建 / debian 运行（`better-sqlite3` 等原生模块会挂）
+2. **构建阶段分层** — 先 `pnpm install` 再 `COPY apps`，避免 web 改动击穿依赖缓存（`9a92fcdf8` 起）
+3. **Stage-2 资源复制** — 除 `skills/`、`design-systems/`、`craft/`、`plugins/_official/` 外，必须包含：
    - **`design-templates/`**（`6fd17710a`）— agent 读取 `web-prototype` 等模板种子；缺了会「找不到技能侧文件」
-3. **运行时** — `tini` + `su-exec` + `bash` + `git` + **全局 Claude Code**
-4. **`OD_BIND_HOST=0.0.0.0`**、`EXPOSE 7456`
-5. **Entrypoint** — 启动前对 `OD_DATA_DIR`（默认 `/app/.od`）做 `chown`，再以 `open-design` 用户跑 daemon（`1cb31c397`）
+4. **运行时** — `tini` + `gosu`（替代 alpine `su-exec`）+ `bash` + `git` + **全局 Claude Code** + **Hermes（`/opt/hermes-venv`）**
+5. **`OD_BIND_HOST=0.0.0.0`**、`EXPOSE 7456`
+6. **Entrypoint** — `deploy/docker-entrypoint.sh`：对 `OD_DATA_DIR` `chown`、播种 `HERMES_HOME`、再 `gosu open-design` 跑 daemon
 
 Railway 构建配置：
 
@@ -71,8 +90,9 @@ Railway 构建配置：
 RAILWAY_DOCKERFILE_PATH=deploy/Dockerfile
 ```
 
-构建 context 应为 **仓库根目录**（与 Dockerfile 内 `COPY design-templates` 等路径一致）。
+构建 context 应为 **仓库根目录**（与 Dockerfile 内 `COPY design-templates`、`COPY deploy/docker-entrypoint.sh` 等路径一致）。
 
+升级 Hermes：在 Railway 设置 build arg `HERMES_REF=vYYYY.M.D` 后 Redeploy（与 template 相同；容器内 `hermes update` 在 docker stamp 下会拒绝，这是预期行为）。
 ---
 
 ## Daemon 代码定制（合并上游时需保留）
@@ -162,7 +182,8 @@ git checkout railway-deploy && git merge railway-deploy-test && git push
 
 - `main` 的结构重构（模块化 routes、新 prompt 栈）→ **采用 upstream**
 - 上表「Daemon 代码定制」→ **在 upstream 结构上重新接线**
-- `deploy/Dockerfile` → **保留 fork 的 Claude Code、su-exec、design-templates、OD_BIND_HOST**
+- `deploy/Dockerfile` → **保留 fork 的 bookworm runtime、Claude Code、Hermes、gosu、design-templates、OD_BIND_HOST**
+- `deploy/docker-entrypoint.sh` → **保留 Volume chown + Hermes home 播种**
 
 ---
 
@@ -184,18 +205,22 @@ git checkout railway-deploy && git merge railway-deploy-test && git push
 - [ ] 新建项目 + 对话，技能侧文件读取无「读取 ×3 错误」
 - [ ] `/api/projects/.../events` 非 401（预览自动刷新）
 - [ ] 入口 **Templates** 标签有模板卡片（证明 `design-templates` 在镜像内）
+- [ ] Agent 下拉有 **Hermes**；设好 `OPENAI_*` 后对话可打到中转
+- [ ] Volume 挂载后，`$OD_DATA_DIR/hermes/` 在 redeploy 后仍在
 
 ---
 
 ## 相关文件索引
 
 ```text
-deploy/Dockerfile              # 镜像与资源复制
+deploy/Dockerfile              # bookworm 镜像、Claude Code、Hermes、资源复制
+deploy/docker-entrypoint.sh    # Volume chown + Hermes home 播种 + gosu
 deploy/docker-compose.yml      # 本地参考；Railway 不经过此文件的 env 映射
 deploy/.env.example            # 本地变量模板（注意 OD_* vs OPEN_DESIGN_*）
 apps/daemon/src/static-spa.ts  # fetch Bearer 注入
 apps/daemon/src/server.ts      # Bearer 中间件、SSE 绕过、技能 staging
 apps/daemon/src/runtimes/chat-prompt-inputs.ts
+apps/daemon/src/runtimes/defs/hermes.ts
 apps/daemon/tests/api-token-guard.test.ts
 specs/current/skills-and-design-templates.md  # design-templates 架构说明
 ```
